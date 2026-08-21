@@ -67,6 +67,32 @@
   var TEST_RIDE_URL  = CFG.testRideUrl   ||
     'https://docs.google.com/forms/d/e/1FAIpQLSezb3vfHPb4Gvw0vRi0vcqhmTEcsxWcstYmxh7E3oa4rLZVDQ/viewform';
 
+  /* Optional: carry what the visitor already typed in the chat into the booking
+     form, so they land on it with their details filled in and only have to pick
+     a county and a date. Set the three Google Form field ids here, taken from
+     the form's own "Get pre-filled link". Leave blank and the form simply opens
+     empty, exactly as before. */
+  var TEST_RIDE_FIELDS = CFG.testRideFields || {
+    name:  '',   // e.g. 'entry.1234567890'
+    phone: '',
+    email: ''
+  };
+
+  /* Details the visitor has given us during this conversation. */
+  var known = { name: '', phone: '', email: '' };
+
+  function testRideLink() {
+    var parts = [], k;
+    for (k in TEST_RIDE_FIELDS) {
+      if (TEST_RIDE_FIELDS[k] && known[k]) {
+        parts.push(encodeURIComponent(TEST_RIDE_FIELDS[k]) + '=' + encodeURIComponent(known[k]));
+      }
+    }
+    if (!parts.length) return TEST_RIDE_URL;
+    return TEST_RIDE_URL + (TEST_RIDE_URL.indexOf('?') === -1 ? '?' : '&') +
+           'usp=pp_url&' + parts.join('&');
+  }
+
   /* ==========================================================================
      BRAND ASSETS  (extracted from Roam's own production creative)
      ========================================================================== */
@@ -191,31 +217,68 @@
     }
   };
 
+  /* Every FAQ entry carries a category. Retrieval is constrained to the
+     category the question was classified into, so a question about one topic
+     can never be answered with a fact from another. */
   var FAQ = [
-    { q: 'Can I charge at home?',            a: "Yes. The Roam Air's removable battery plugs into any standard home outlet using the included portable charger, just like charging a phone." },
-    { q: 'Where can I charge?',              a: 'At home with the portable charger, at a 24/7 self-service Roam Point, or at a full-service Roam Hub. There are nine Roam Hubs across Nairobi.' },
-    { q: 'How much does charging cost?',     a: 'About KES 1 per kilometre at home. That is roughly KES 80 to fill one battery for about 80 km, or KES 160 for two batteries and a full 160 km day. Your exact cost depends on your electricity tariff and how you ride.' },
-    { q: 'What does a Roam Point cost?',     a: 'Fast charging at a Roam Point is charged per unit of electricity: KSh 40 per kWh during the day and a discounted KSh 25 per kWh off-peak and overnight. Battery rental at a Roam Hub is KES 20 an hour.' },
-    { q: 'How long does a full charge take?',a: 'About 3 hours for a full charge from a standard wall outlet using the portable charger. At a Roam Point the fast-charging battery adds over 1 km of range per minute.' },
-    { q: 'How far can it go on one charge?', a: 'Up to 80 km on one battery and up to 160 km on two, which is about the distance from Nairobi to Nakuru. Top speed is 90 km/h. Real range depends on load, terrain, speed and riding style.' },
-    { q: 'Do I own the battery?',            a: 'Yes. Once your financing is complete you own the motorcycle and the battery outright. No swapping, no waiting, no fees that never end.' },
-    { q: 'How heavy is the battery?',        a: 'About 20 kg, roughly the same as the 20-litre jerrican most homes use for water. It lifts out so you can carry it inside to charge.' },
-    { q: 'Is Roam available outside Kenya?', a: 'Not yet. Roam currently sells, services, charges and finances in Kenya only. We plan to expand across East Africa and then wider into Africa, but nothing is confirmed for other countries yet.' },
-    { q: 'Can I charge using solar?',        a: 'Yes. A Roam Air rode 6,000 km from Nairobi to South Africa powered entirely by solar. For home solar, the system needs to be sized correctly for the charger, so talk to us or your installer first.' },
-    { q: 'Can I finance a Roam Air?',        a: 'Yes, up to 97% asset financing through M-KOPA, Fortune Credit, Platinum Credit, Watu or Rafiki Bank, with deposits from KES 15,000 and terms of 12, 18 or 24 months. Once the loan is paid off you own both the bike and the battery.' },
-    { q: 'How much can I save?',             a: 'At 160 km/day most riders save around KES 577 a day versus a petrol motorcycle and KES 213 a day versus a battery-swapping motorcycle, over KES 100,000 a year.' },
-    { q: "What's the cash price?",           a: 'KES 296,000 for a single battery plus one charger, or KES 430,000 for dual batteries plus two chargers.' },
-    { q: 'Where are Roam vehicles made?',    a: "Designed, engineered and assembled in Kenya at Roam Park, East Africa's largest EV assembly plant, with 98% robotic welding and capacity for 50,000 motorcycles a year." },
-    { q: "What's the warranty?",             a: 'Roam Air carries a 2-year commercial warranty, and the Gen 3 fast-charging battery is guaranteed for 100,000 km.' },
-    { q: 'Can I book a test ride?',          a: 'Yes, free and with no commitment. Type "book a test ride" here and I will bring up the booking link, or call ' + PHONE + ', Mon–Fri 9am–5pm.' },
-    { q: 'Do you offer fleet deals?',        a: 'Yes, for operators running multiple bikes, with Roam Explorer AI fleet monitoring included. Contact sales@roam-electric.com.' },
-    { q: 'What if my battery is stolen?',    a: 'Every battery is GPS-tracked in real time through the Roam App, with live health monitoring and anti-theft alerts.' }
+    { c:'home_charging',   q: 'Can I charge at home?',            a: "Yes. The Roam Air's removable battery plugs into any standard home outlet using the included portable charger, just like charging a phone." },
+    { c:'charging_where',  q: 'Where can I charge?',              a: 'At home with the portable charger, at a 24/7 self-service Roam Point, or at a full-service Roam Hub. Roam Hubs are located across Nairobi.' },
+    { c:'charging_cost',   q: 'How much does charging cost?',     a: 'About KES 1 per kilometre at home. That is roughly KES 80 to fill one battery for about 80 km, or KES 160 for two batteries and a full 160 km day. Your exact cost depends on your electricity tariff and how you ride.' },
+    { c:'charging_cost',   q: 'What does a Roam Point cost?',     a: 'Fast charging at a Roam Point is charged per unit of electricity: KSh 40 per kWh during the day and a discounted KSh 25 per kWh off-peak and overnight. Battery rental at a Roam Hub is KES 20 an hour.' },
+    { c:'charging_time',   q: 'How long does a full charge take?',a: 'About 3 hours for a full charge from a standard wall outlet using the portable charger. At a Roam Point the Gen 3 battery adds over 1 km of range per minute.' },
+    { c:'range',           q: 'How far can it go on one charge?', a: 'Up to 80 km on one battery and up to 160 km on two, which is about the distance from Nairobi to Nakuru. Real range depends on load, terrain, speed and riding style.' },
+    { c:'battery_owner',   q: 'Do I own the battery?',            a: 'Yes. Once your financing is complete you own the motorcycle and the battery outright. No swapping, no waiting, no fees that never end.' },
+    { c:'battery_specs',   q: 'How heavy is the battery?',        a: 'About 20 kg, roughly the same as the 20-litre jerrican most homes use for water. It lifts out so you can carry it inside to charge.' },
+    { c:'battery_specs',   q: 'What kind of battery is it?',      a: 'A removable 72V lithium-ion battery in an industrial-grade aluminium casing, sealed to IP67 against dust and water, with built-in GPS tracking and smart telemetry.' },
+    { c:'battery_specs',   q: 'Is the battery waterproof?',       a: 'The battery is sealed to IP67, which protects it against dust and water in normal riding, including rain and wet roads. Avoid deep standing water, as with any motorcycle.' },
+    { c:'durability',      q: 'Is the bike waterproof?',          a: 'The battery is sealed to IP67 against dust and water, and the bike is built for rain and wet roads. Avoid deep standing water, as with any motorcycle.' },
+    { c:'country',         q: 'Is Roam available outside Kenya?', a: 'Not yet. Roam currently sells, services, charges and finances in Kenya only. We plan to expand across East Africa and then wider into Africa, but nothing is confirmed for other countries yet.' },
+    { c:'solar',           q: 'Can I charge using solar?',        a: 'Yes. A Roam Air rode 6,000 km from Nairobi to South Africa powered entirely by solar. For home solar, the system needs to be sized correctly for the charger, so talk to us or your installer first.' },
+    { c:'financing',       q: 'Can I finance a Roam Air?',        a: 'Yes, up to 97% asset financing through M-KOPA, Fortune Credit, Platinum Credit, Watu or Rafiki Bank, with deposits from KES 15,000 and terms of 12, 18 or 24 months. Once the loan is paid off you own both the bike and the battery.' },
+    { c:'savings',         q: 'How much can I save?',             a: 'At 160 km/day most riders save around KES 577 a day versus a petrol motorcycle and KES 213 a day versus a battery-swapping motorcycle, over KES 100,000 a year.' },
+    { c:'pricing',         q: "What's the cash price?",           a: 'KES 296,000 for a single battery plus one charger, or KES 430,000 for dual batteries plus two chargers.' },
+    { c:'manufacturing',   q: 'Where are Roam vehicles made?',    a: 'Designed, engineered and assembled in Kenya at Roam Park, a 10,000 sqm facility in Nairobi with eventual capacity for 50,000 motorcycles a year.' },
+    { c:'warranty',        q: "What's the warranty?",             a: 'Roam Air carries a 2-year commercial warranty, and the Gen 3 battery is guaranteed for 100,000 km.' },
+    { c:'test_ride',       q: 'Can I book a test ride?',          a: 'Yes, free and with no commitment. Use the booking button above to pick a date, or call ' + PHONE + ', Mon–Fri 9am–5pm.' },
+    { c:'b2b',             q: 'Do you offer fleet deals?',        a: 'Yes, for operators running multiple bikes, with Roam Explorer fleet monitoring included. Contact sales@roam-electric.com.' },
+    { c:'theft',           q: 'What if my battery is stolen?',    a: 'Every battery is GPS-tracked in real time through the Roam App, with live health monitoring and anti-theft alerts. Report a theft to the team on ' + PHONE + ' straight away.' },
+    { c:'performance',     q: 'How powerful is it?',              a: 'A 3,000W mid-drive motor producing 55 Nm of torque, with three riding modes: Eco, Standard and Power. Top speed is 90 km/h and 0 to 60 km/h takes 6.9 seconds.' }
   ];
 
   var SUGGESTIONS = ['Roam Air specs', 'Financing options', 'Where can I charge?', 'How much will I save?', 'Book a test ride'];
 
   var SYSTEM_PROMPT = [
     'You are Roam Assistant, representing Roam Electric: "The Standard of Electric Mobility in Africa." You are warm, knowledgeable and passionate about Roam\'s impact on African mobility. Your purpose is to help people choose and buy a Roam Air.',
+    '',
+    'GOLDEN RULE, ABOVE EVERYTHING ELSE:',
+    'A correct "I do not have confirmed information on that" is always better than an irrelevant, inferred or invented answer.',
+    'RELEVANCE MATTERS MORE THAN COMPLETENESS. Never answer a question just because you hold some Roam information that sounds related.',
+    '',
+    'ANSWER THE EXACT QUESTION ASKED. Do not answer a related question, a broader question, a nearby topic, or what you think they "probably meant".',
+    'Before you answer, check: does the information below directly answer THIS question, in the same subject area? If not, do not use it. Say you do not have it confirmed and give the escalation instead.',
+    'Worked example of the failure to avoid. Asked "Are you in Eldeyo Market?" the subject is location availability, not durability. Answering "Roam Air is built for Kenyan roads" is WRONG. The correct reply is that you do not have confirmed availability for that place and they should call ' + PHONE + '.',
+    '',
+    'THE OPPOSITE MISTAKE IS ALSO WRONG. Do not say you cannot confirm something just because the customer worded it differently from the notes below. Understand intent, not wording. "Can I buy a Roam?", "Where do I get one?", "Nataka Roam" and "Naeza nunua Roam?" are all the same purchase question, and all deserve a real answer. Only fall back when the information is genuinely missing, not when the phrasing is unfamiliar.',
+    '',
+    'CUSTOMERS WRITE IN KENYAN ENGLISH, SWAHILI AND SHENG. Understand and reply helpfully to short messages, typos and mixed language. Reply in the language they used. Common terms: naeza/naweza = can I, nataka = I want, nunua = buy, napata/pata = get, wapi = where, iko = is, ngapi = how much, bei = price, nyumbani = at home, betri = battery, pikipiki = motorcycle, duka = shop, moja = one, mbili = two, gharama = cost, lini = when.',
+    '',
+    'IF TWO READINGS ARE GENUINELY PLAUSIBLE, ask one short clarifying question. Do not ask for clarification when the question is already clear, and do not use a clarification as a way to avoid answering.',
+    '',
+    'USE THE CONVERSATION. A short follow-up like "and if I want two batteries?" continues the previous subject. Do not treat it as a brand new question.',
+    '',
+    'NEVER INVENT: shops, dealers, charging stations, service centres, countries of operation, prices, deposits, rates, promotions, stock levels, colours, warranty outcomes, or financing approvals. If it is not written below, it is unknown.',
+    'NEVER CLAIM LIVE INFORMATION. You cannot see stock, an account, a financing decision, or the nearest Roam Point. Do not say you checked anything.',
+    '',
+    'IF TWO FACTS BELOW CONFLICT, do not quietly pick one. Say the team will confirm the exact figure and give the phone number.',
+    'DO NOT OVER-ANSWER. Answer the question asked in one to four sentences, then optionally offer ONE useful follow-up. Do not empty the whole knowledge base into every reply.',
+    '',
+    'ESCALATION WORDING, use the one that fits:',
+    '- Unknown place: "I don\'t have confirmed Roam availability for [place] in my current information. Please WhatsApp or call Roam on ' + PHONE + ' and we\'ll confirm it for you."',
+    '- Unknown country: "Roam is currently available in Kenya. I don\'t have confirmed commercial availability for [country] at this time. Please contact Roam for the latest update."',
+    '- Unknown price: "I don\'t have a confirmed current price for that configuration. Please contact Roam on ' + PHONE + ' for the latest price."',
+    '- Unknown financing: "Financing depends on the financier and package. I don\'t have enough verified information to confirm that specific option. Please contact Roam on ' + PHONE + '."',
+    '- Unknown technical: "I don\'t have a verified answer to that technical question in my current knowledge base. Please contact the Roam team on ' + PHONE + ' for confirmation."',
+    '- Unknown promotion: "I don\'t have a confirmed current promotion for that offer. Please contact Roam on ' + PHONE + ' for the latest information."',
     '',
     'RESPONSE FORMAT (CRITICAL):',
     '- Open with one short sentence, then bullets, then one closing line',
@@ -242,8 +305,10 @@
     '• Weight 129–149 kg; max payload 250 kg',
     '• About 3 hours for a full charge from a standard wall outlet with the portable charger',
     '• At a Roam Point the fast-charging battery adds over 1 km of range per minute',
-    '• Battery guaranteed 100,000 km; GPS-tracked via the Roam App',
-    '• Four ride modes: Eco, Standard, Power, Reverse',
+    '• Battery: removable 72V lithium-ion, about 20 kg, IP67 sealed, industrial-grade aluminium casing',
+    '• Battery guaranteed 100,000 km; GPS tracking and smart telemetry built in',
+    '• 3,000W mid-drive motor, 55 Nm of torque',
+    '• Three riding modes: Eco, Standard and Power',
     '• Reinforced chassis rated 200,000+ vibration cycles; 2-year commercial warranty',
     '• Built to handle rain, dust and everyday riding on tough African roads',
     '• Cash price: KES 296,000 (single battery + 1 charger) or KES 430,000 (dual battery + 2 chargers)',
@@ -273,7 +338,15 @@
     '• Uganda: NO. Rwanda: NO. Tanzania: NO. All other countries: NO.',
     'Never speculate about Roam\'s expansion plans, market availability, dealerships, charging infrastructure or financing in any country that is not marked ACTIVE above. If asked, say Roam is Kenya-only today, that expansion across East Africa and then wider Africa is the intention, that nothing else is confirmed, and offer to take their details so the team can contact them when it changes. A bike can physically be ridden across a border, but registration, warranty, servicing, spare parts and charging access outside Kenya must be confirmed with Roam first.',
     '',
-    'LOCATIONS: Roam Shop Thika, Roam Shop Machakos, Roam Nairobi Service Centre, and nine Roam Hubs across Nairobi.',
+    'APPROVED LOCATION DATABASE. This is the complete list. A place that is not on it is UNKNOWN, and unknown means escalate:',
+    '• Roam Nairobi Service Centre, Nairobi',
+    '• Roam Shop Thika',
+    '• Roam Shop Machakos',
+    '• Roam Hubs across Nairobi (charging, battery rental, after-sales)',
+    '• Roam Points, self-service fast charging',
+    'If someone names any other town, market, estate, road or neighbourhood, you do NOT have confirmed availability there. Do not answer with a nearby town, do not answer with a product fact, and do not imply a presence. Give the unknown-place escalation. Do not state how many Roam Hubs there are, as the number changes.',
+    '',
+    'COLOURS: not confirmed in this knowledge base. If asked what colours are available, say you do not have confirmed current colour options and give the phone number.',
     '',
     'SERVICING: an electric motorcycle still needs regular maintenance, but there are NO oil changes and NO spark plugs because there is no combustion engine. Servicing covers tyres, brakes, chain, suspension, electrical systems and other wear components. Genuine parts are available through the Roam service network.',
     '',
@@ -325,136 +398,380 @@
   ].join('\n');
 
   // Offline answers for the main sales themes (used when no apiEndpoint is set)
+  /* ==========================================================================
+     APPROVED LOCATION DATABASE
+     Only places listed here may ever be described as having a Roam presence.
+     Anything else is unknown and must be escalated, never inferred.
+     ========================================================================== */
+  var PLACES = [
+    { k: /\bnairobi\b/,  a: 'Yes. Roam is based in Nairobi. Our service centre is here and there are Roam Hubs across the city for charging and after-sales.' },
+    { k: /\bthika\b/,    a: 'Yes. Roam Shop Thika serves that area.' },
+    { k: /\bmachakos\b/, a: 'Yes. Roam Shop Machakos serves that area.' }
+  ];
+
+  /* Words that follow "in / at / near" but are not places. */
+  var NOT_A_PLACE = /^(stock|business|charge|touch|person|store|the|a|an|my|your|our|this|that|it|kenya|there|here|town|area|county|counties|general|total|fact|order|time|need|use|mind|control|africa|east)$/;
+
+  var ACTIVE_COUNTRY = /\bkenya\b|\bkenyan\b/;
+  var OTHER_COUNTRY  = /\buganda\b|\brwanda\b|\btanzania\b|\bethiopia\b|\bnigeria\b|\bghana\b|\bburundi\b|\bsouth sudan\b|\bsomalia\b|\bzambia\b|\bmalawi\b|\bcongo\b|\bdrc\b|\bsouth africa\b|\begypt\b|\bmorocco\b|\bzimbabwe\b|\bmozambique\b|\bbotswana\b|\bnamibia\b|\bsenegal\b|\bivory coast\b|\bcameroon\b|\bangola\b|\bindia\b|\bnigeria\b|\bdubai\b|\buae\b|\buk\b|\busa\b|\bamerica\b/;
+
+  /* ==========================================================================
+     CATEGORY FALLBACKS
+     Used when the question is understood but the knowledge base holds no
+     verified answer. Never answered from general knowledge or inference.
+     ========================================================================== */
+  var FALLBACK = {
+    location:
+      "I don't have confirmed Roam availability for {x} in my current information.\n" +
+      'Please WhatsApp or call Roam on ' + PHONE + ' and we will confirm it for you.',
+    country:
+      'Roam is currently available in Kenya. I do not have confirmed commercial availability for {x} at this time.\n' +
+      'Please contact us on ' + PHONE + ' for the latest expansion information.',
+    pricing:
+      "I don't have a confirmed current price for that configuration.\n" +
+      'Please contact Roam on ' + PHONE + ' for the latest price.',
+    financing:
+      "Financing depends on the financier and package, and I don't have enough verified information to confirm that specific option.\n" +
+      'Please contact Roam on ' + PHONE + '.',
+    technical:
+      "I don't have a verified answer to that technical question in my current knowledge base.\n" +
+      'Please contact the Roam team on ' + PHONE + ' for confirmation.',
+    promotion:
+      "I don't have a confirmed current promotion for that offer.\n" +
+      'Please contact Roam on ' + PHONE + ' for the latest information.',
+    colour:
+      "I don't have confirmed current colour options in my knowledge base.\n" +
+      'Please contact Roam on ' + PHONE + ' and we will confirm the available colours.',
+    hours:
+      "I don't have confirmed opening hours for our shops in my current information.\n" +
+      'The sales line is open Mon–Fri, 9am–5pm. Call ' + PHONE + ' and we will confirm shop hours for you.',
+    account:
+      'That one needs a person, because it depends on your own account and paperwork.\n' +
+      'Please contact Roam on ' + PHONE + ' and the team will check it for you.',
+    fault:
+      'Sorry to hear that. Please contact the Roam team on ' + PHONE + ' straight away so they can help you properly.',
+    general:
+      "I want to get this exactly right for you rather than guess, and I don't have a confirmed answer to that in my current information.\n" +
+      'Please WhatsApp or call Roam on ' + PHONE + ' and the team will answer it for you.'
+  };
+
+  /* ==========================================================================
+     CATEGORY ANSWERS
+     One canonical answer per category. Retrieval never crosses categories.
+     ========================================================================== */
   var TOPICS = [
-    { m: /financ|loan|deposit|instal|payment|afford|own the bike/, a:
+    { c:'financing', a:
       'Up to 97% asset financing, with deposits from KES 15,000.\n' +
       '• M-KOPA, Fortune Credit, Platinum Credit, Watu, Rafiki Bank\n' +
       '• Terms of 12, 18 or 24 months\n' +
+      '• The exact rate depends on financier, battery package, deposit and term\n' +
       '• When the loan ends you own the bike **and** the battery\n' +
-      '• Full per-plan pricing is in the card above\n' +
-      'Want help picking the right plan?' },
-    { m: /fast charg|charging (speed|time)|how (fast|quick|long)[\s\S]{0,25}charg|20.?80|top up|roam point/, a:
-      'Fast charging is at Roam Points and Roam Hubs.\n' +
-      '• Over 1 km of range added per minute\n' +
-      '• 20% to 80% in under 45 minutes\n' +
-      '• Roam Points are 24/7 self-service, pay by mobile money or the Roam App\n' +
-      '• At home the portable charger takes about 3 hours for a full battery\n' +
-      'Want to know what charging costs?' },
-    { m: /spec|how fast|top speed|torque|power|payload|weight|range|how far/, a:
-      'Roam Air Gen 3 is made for African terrain and built for your hustle.\n' +
-      '• Up to 80 km on one battery, up to 160 km on two\n' +
-      '• That is about Nairobi to Nakuru on a full charge\n' +
-      '• 90 km/h top speed, 0–60 in 6.9 seconds\n' +
-      '• 3,000W rated power, 55 Nm peak torque\n' +
-      '• 250 kg max payload, 2-year commercial warranty\n' +
-      'Ready for a free test ride?' },
-    { m: /(charg\w*|electricit\w*|power|unit)[\s\S]{0,30}(cost|much|price|expensive|spend|tariff|kwh|bill)|(cost|much|price|expensive|spend|pay)[\s\S]{0,30}(charg\w*|electricit\w*)|\bkwh\b|electricity (tariff|bill|rate)/, a:
+      'Tell me one or two batteries and I will show you the options.' },
+
+    { c:'pricing', a:
+      'Cash prices for the Roam Air Gen 3:\n' +
+      '• KES 296,000 for one battery and one charger\n' +
+      '• KES 430,000 for two batteries and two chargers\n' +
+      'Would you rather see the financing options?' },
+
+    { c:'charging_cost', a:
       'Charging is about KES 1 per kilometre at home.\n' +
       '• About KES 80 to fill one battery, roughly 80 km\n' +
       '• About KES 160 for two batteries, a full 160 km day\n' +
-      '• Roam Point fast charging: KSh 40/kWh daytime, KSh 25/kWh off-peak\n' +
+      '• Roam Point: KSh 40/kWh daytime, KSh 25/kWh off-peak\n' +
       '• Battery rental at a Roam Hub: KES 20 an hour\n' +
-      'Tell me your daily distance and I will work out your savings.' },
-    { m: /uganda|rwanda|tanzania|ethiopia|nigeria|ghana|outside kenya|other countr|which countr|abroad|export|international/, a:
-      'Roam is available in Kenya only at the moment.\n' +
-      '• Sales, servicing, charging and financing are all Kenya-based\n' +
-      '• We plan to expand across East Africa, then wider into Africa\n' +
-      '• Nothing is confirmed for other countries yet\n' +
-      'If you are outside Kenya, leave your details and we will contact you when that changes.' },
-    { m: /solar|off.?grid|generator|blackout|power (cut|goes off)|no electricity/, a:
-      'Yes, a Roam Air can run on solar.\n' +
-      '• One rode 6,000 km to South Africa on solar alone\n' +
-      '• Home solar must be sized correctly for the charger\n' +
-      '• During a blackout you need a backup supply, charging needs electricity\n' +
-      'Want us to talk through your setup?' },
-    { m: /canopy|fleet (platform|software|manage)|manage my fleet|financier|track (my )?fleet/, a:
-      'Roam Canopy is our platform for fleets and financiers.\n' +
-      '• Monitor, manage and act on connected fleet information\n' +
-      '• Built for businesses, logistics operators and financiers\n' +
-      '• Roam Explorer gives live location, battery health and usage per bike\n' +
-      '• Works on 2G, 3G and 4G, so it holds up in rural areas\n' +
-      'How many bikes are you running?' },
-    { m: /shop|showroom|where.*(office|located|find you)|thika|machakos|service cent/, a:
-      'You can find us at these locations.\n' +
-      '• Roam Shop Thika and Roam Shop Machakos\n' +
-      '• Roam Nairobi Service Centre for servicing and parts\n' +
-      '• Nine Roam Hubs across Nairobi for charging and maintenance\n' +
-      'Call ' + PHONE + ' and we will point you to the nearest one.' },
-    { m: /save|saving|cheaper|petrol|fuel|swap|compare/, a:
+      'How many kilometres do you ride a day? I can work out your cost.' },
+
+    { c:'home_charging', a:
+      'Yes, you can charge at home.\n' +
+      '• Every Roam Air comes with a portable charger\n' +
+      '• It plugs into a standard wall outlet\n' +
+      '• The battery lifts out so you can carry it indoors\n' +
+      '• About 3 hours for a full battery\n' +
+      'Want to know what that costs?' },
+
+    { c:'charging_time', a:
+      'Charging times for the Roam Air Gen 3:\n' +
+      '• At home from a standard outlet: about 3 hours for a full battery\n' +
+      '• At a Roam Point the battery adds over 1 km of range per minute\n' +
+      'Want to know what charging costs?' },
+
+    { c:'charging_where', a:
+      'Three ways to charge.\n' +
+      '• At home with the portable charger, always the cheapest\n' +
+      '• Roam Point: self-service fast charging, pay by mobile money in the Roam App\n' +
+      '• Roam Hub: charging, battery rental and after-sales, located across Nairobi\n' +
+      'Want to know what each one costs?' },
+
+    { c:'battery_owner', a:
+      'You own your battery outright. No swapping, no waiting.\n' +
+      '• Once financing is complete the bike and the battery are yours\n' +
+      '• No ongoing swap fees\n' +
+      '• That ownership is what protects your resale value\n' +
+      'Want to see the financing plans?' },
+
+    { c:'battery_specs', a:
+      'The Roam Air Gen 3 battery:\n' +
+      '• Removable 72V lithium-ion, about 20 kg, like a 20-litre jerrican\n' +
+      '• IP67 sealed against dust and water\n' +
+      '• Industrial-grade aluminium casing\n' +
+      '• GPS tracking and smart telemetry built in\n' +
+      '• Guaranteed for 100,000 km\n' +
+      'Anything specific you want to know about it?' },
+
+    { c:'range', a:
+      'Range on the Roam Air Gen 3:\n' +
+      '• Up to 80 km on one battery\n' +
+      '• Up to 160 km on two, about Nairobi to Nakuru\n' +
+      '• Real range depends on load, terrain, speed and riding style\n' +
+      'How far do you ride in a day?' },
+
+    { c:'performance', a:
+      'Roam Air Gen 3 performance:\n' +
+      '• 3,000W mid-drive motor, 55 Nm of torque\n' +
+      '• Top speed 90 km/h, 0 to 60 km/h in 6.9 seconds\n' +
+      '• Three riding modes: Eco, Standard and Power\n' +
+      '• Reinforced suspension for steep climbs and rough roads\n' +
+      'Ready for a free test ride?' },
+
+    { c:'payload', a:
+      'Roam Air is made for carrying real working loads.\n' +
+      '• Maximum payload 250 kg including rider\n' +
+      '• 55 Nm of torque, so it pulls well when loaded\n' +
+      '• Widened subframe with standard fixing points for delivery boxes\n' +
+      'Carrying something specific? Tell me and I will advise.' },
+
+    { c:'durability', a:
+      'Roam Air Gen 3 is built for African road conditions.\n' +
+      '• Reinforced chassis tested through 200,000+ duty cycles under load\n' +
+      '• Battery sealed to IP67 against dust and water\n' +
+      '• Proven across a 6,000 km ride from Nairobi to South Africa\n' +
+      'Avoid deep standing water, as with any motorcycle. Anything else?' },
+
+    { c:'savings', a:
       'Save up to 40% a day versus fuel. At 160 km a day:\n' +
       '• Roam Air: about KES 160/day to charge\n' +
       '• Petrol motorcycle: about KES 897/day\n' +
       '• Battery swapping: about KES 533/day\n' +
       '• That is over KES 100,000 saved a year\n' +
-      'Charge cheaply, spend less, keep more. See the financing plans?' },
-    { m: /test ride|book|demo|try it|showroom/, a:
-      'Test rides are free, with no commitment.\n' +
-      '• Tap the button below to pick a date\n' +
-      '• Or call ' + PHONE + ', Mon–Fri 9am–5pm\n' +
-      '• WhatsApp works too: wa.me/' + WHATSAPP + '\n' +
-      'Ready to pick a date?' },
-    { m: /\bbus(es)?\b|matatu|shuttle|rapid|roam move|coach/, a:
-      'Our electric buses are not available to order at the moment.\n' +
-      '• Bus sales are on hold while we focus on Roam Air\n' +
-      '• Leave your details and we will contact you when that changes\n' +
-      '• Roam Air is available now, with financing from KES 15,000 down\n' +
-      'Would you like a rep to reach out?' },
-    { m: /career|job|hiring|vacanc|work at|apply for a job/, a:
-      'We are 250+ people and still hiring.\n' +
-      '• Open roles across engineering, manufacturing and after-sales\n' +
-      '• Values: Dignity, Discovery, Drive, Delivery\n' +
-      '• Apply at roam-electric.com/careers\n' +
-      'Want to know about a specific role?' },
-    { m: /servic(e|ing)|maintain|maintenance|repair|spare part|breakdown|mechanic|garage|oil change|spark plug|\boil\b|tune.?up/, a:
-      'Servicing is handled at our Nairobi ride-in, ride-out centre.\n' +
+      'Tell me your daily petrol spend and I will work out your saving.' },
+
+    { c:'service', a:
+      'Servicing is handled at our Nairobi ride-in, ride-out service centre.\n' +
       '• No oil changes and no spark plugs, there is no petrol engine\n' +
       '• You still service tyres, brakes, chain, suspension and electrics\n' +
       '• Genuine parts and diagnostics at any Roam Hub\n' +
-      '• About KES 7,200 a year, far below petrol\n' +
-      'Want the service centre location?' },
-    { m: /battery (life|last|degrad|replac|health|weigh)|how long[\s\S]{0,20}battery|cycles|own[\s\S]{0,15}battery|battery[\s\S]{0,15}(own|weigh|heavy|kg)|(weigh|heavy)[\s\S]{0,20}battery|remove.*batter|batter.*remov/, a:
-      'You own your battery outright. No swapping, no waiting.\n' +
-      '• About 20 kg, like a 20-litre jerrican, and lifts out to charge indoors\n' +
-      '• Guaranteed for 100,000 km, IP67 sealed against dust and water\n' +
-      '• GPS-tracked against theft, health monitored in the Roam App\n' +
-      '• Survived being run over by an 18-tonne truck in testing\n' +
-      'Want to know about charging options?' },
-    { m: /rain|wet|water|weather|flood|dust|mud|waterproof/, a:
-      'Roam Air is built for real Kenyan road conditions.\n' +
-      '• Sealed against dust and water for daily riding\n' +
-      '• Reinforced chassis rated 200,000+ vibration cycles\n' +
-      '• Tested across 6,000 km from Nairobi to South Africa\n' +
-      'Avoid deep standing water, as with any motorcycle. Anything else?' },
-    { m: /load|carry|luggage|cargo|goods|delivery|heavy|passenger|pillion|boda/, a:
-      'Roam Air is made for carrying real working loads.\n' +
-      '• Maximum payload 250 kg including rider\n' +
-      '• 55 Nm torque, so it pulls well when loaded\n' +
-      '• Used daily for boda, delivery and cold-chain work\n' +
-      'Carrying something specific? Tell me and I will advise.' },
-    { m: /upcountry|outside nairobi|mombasa|kisumu|nakuru|eldoret|rural|my town|county|village/, a:
-      'Roam Air works upcountry, and riders do it every day.\n' +
+      'For service pricing and intervals, call ' + PHONE + '.' },
+
+    { c:'warranty', a:
+      'Roam Air carries a 2-year commercial warranty.\n' +
+      '• The Gen 3 battery is guaranteed for 100,000 km\n' +
+      '• For what a specific warranty covers in your case, the team will confirm\n' +
+      'Call ' + PHONE + ' and they will check it for you.' },
+
+    { c:'solar', a:
+      'Yes, a Roam Air can run on solar.\n' +
+      '• One rode 6,000 km to South Africa on solar alone\n' +
+      '• Home solar must be sized correctly for the charger\n' +
+      '• During a blackout you need a backup supply, charging needs electricity\n' +
+      'Want us to talk through your setup?' },
+
+    { c:'canopy', a:
+      'Roam Canopy is our platform for fleets and financiers.\n' +
+      '• Monitor, manage and act on connected fleet information\n' +
+      '• Built for businesses, logistics operators and financiers\n' +
+      '• Roam Explorer gives location, battery health and usage per bike\n' +
+      'How many bikes are you running?' },
+
+    { c:'b2b', a:
+      'Yes, we work with fleets.\n' +
+      '• Fleet pricing for operators running multiple bikes\n' +
+      '• Roam Canopy and Roam Explorer for monitoring and management\n' +
+      '• Partners include Bolt, Keep It Cool and Greenspoon\n' +
+      'Email sales@roam-electric.com or tell me your fleet size.' },
+
+    { c:'locations', a:
+      'You can find us at these locations.\n' +
+      '• Roam Nairobi Service Centre, for servicing and parts\n' +
+      '• Roam Shop Thika\n' +
+      '• Roam Shop Machakos\n' +
+      '• Roam Hubs across Nairobi for charging and after-sales\n' +
+      'Call ' + PHONE + ' and we will point you to the nearest one.' },
+
+    { c:'upcountry', a:
+      'Yes, riders use Roam Air upcountry every day.\n' +
       '• The portable charger works on any standard outlet, anywhere\n' +
       '• A rider crossed Kenya border to border on charging alone\n' +
-      '• Roam Hubs are currently Nairobi-based, nine of them\n' +
-      'Tell me your town and I will have a rep confirm coverage.' },
-    { m: /licen[cs]e|registration|logbook|number plate|ntsa|legal|insur/, a:
+      '• Roam Hubs are currently Nairobi-based\n' +
+      'Tell me your town and a rep will confirm what is nearest to you.' },
+
+    { c:'test_ride', a:
+      'Test rides are free, with no commitment.\n' +
+      '• Tap the button below to book a date\n' +
+      '• Or call ' + PHONE + ', Mon–Fri 9am–5pm\n' +
+      '• WhatsApp works too: wa.me/' + WHATSAPP + '\n' +
+      'Ready to pick a date?' },
+
+    { c:'buses', a:
+      'Our electric buses are not available to order at the moment.\n' +
+      '• Bus sales are on hold while we focus on Roam Air\n' +
+      '• Leave your details and we will contact you when that changes\n' +
+      'Would you like a rep to reach out?' },
+
+    { c:'country', a:
+      'Roam is available in Kenya only at the moment.\n' +
+      '• Sales, servicing, charging and financing are all Kenya-based\n' +
+      '• We plan to expand across East Africa, then wider into Africa\n' +
+      '• Nothing is confirmed for other countries yet\n' +
+      'If you are outside Kenya, leave your details and we will contact you when that changes.' },
+
+    { c:'manufacturing', a:
+      'Roam Air is designed, engineered and assembled in Kenya.\n' +
+      '• Built at Roam Park, our 10,000 sqm facility in Nairobi\n' +
+      '• Eventual capacity for 50,000 motorcycles a year\n' +
+      '• Over 7,000 motorcycles built to date\n' +
+      'Want to see how it is made?' },
+
+    { c:'legal', a:
       'Registration and insurance work exactly as with a petrol motorcycle.\n' +
       '• Roam Air is road-legal and registers with NTSA normally\n' +
       '• You will need standard motorcycle insurance\n' +
       '• Financing partners often bundle insurance into the plan\n' +
-      'Ask your financier, or I can have a rep talk you through it.' },
-    { m: /resale|resell|second hand|trade in|used|value/, a:
+      'Your financier will confirm what their plan includes.' },
+
+    { c:'resale', a:
       'You own the bike outright once the loan is cleared.\n' +
       '• You own the battery too, unlike battery-swap models\n' +
       '• That ownership is what holds the resale value\n' +
       '• Service history is tracked, which helps at resale\n' +
       'Want to see how the ownership maths compares?' },
-    { m: /how long.*deliver|deliver|collect|pick up|stock|available|lead time|when can i get/, a:
-      'Roam Air is in stock and available now.\n' +
+
+    { c:'buy', a:
+      'Yes, you can buy a Roam Air today.\n' +
+      '• Pay cash, or finance it from a KES 15,000 deposit\n' +
+      '• Buy at Roam Shop Thika, Roam Shop Machakos or our Nairobi centre\n' +
+      '• Most people book a free test ride first\n' +
+      'Shall I take your number so a rep can set it up?' },
+
+    { c:'sales_location', a:
+      'Here is where you can buy a Roam Air.\n' +
+      '• Roam Shop Thika\n' +
+      '• Roam Shop Machakos\n' +
+      '• Roam Nairobi Service Centre\n' +
+      '• Or call ' + PHONE + ' and a rep will arrange it wherever you are\n' +
+      'Want to book a free test ride at one of them?' },
+
+    { c:'delivery', a:
+      'Roam Air is available now.\n' +
       '• Collect from our Nairobi facility, or arrange delivery\n' +
       '• Financing approval is usually the longest step\n' +
       '• Book a free test ride first if you have not ridden one\n' +
-      'Shall I have a rep confirm timing for you?' }
+      'For current stock at a specific shop, call ' + PHONE + '.' },
+
+    { c:'theft', a:
+      'Every battery is GPS-tracked in real time through the Roam App.\n' +
+      '• Live health monitoring and anti-theft alerts\n' +
+      '• Remote shut-off is supported through Roam Explorer\n' +
+      'If something has been stolen, call ' + PHONE + ' straight away.' },
+
+    { c:'careers', a:
+      'We are hiring across engineering, manufacturing and after-sales.\n' +
+      '• Values: Dignity, Discovery, Drive, Delivery\n' +
+      '• Apply at roam-electric.com/careers\n' +
+      'Want to know about a specific role?' },
+
+    { c:'technology', a:
+      'Roam Air Gen 3 is a connected motorcycle.\n' +
+      '• GPS tracking and smart telemetry built into the battery\n' +
+      '• Remote shut-off and anti-theft alerts\n' +
+      '• Roam Explorer works on 2G, 3G and 4G, so it holds up in rural areas\n' +
+      '• Regenerative braking, LED lighting and USB phone charging\n' +
+      'Anything specific you want to know?' },
+
+    { c:'rider_stories', a:
+      'Real riders, real distances.\n' +
+      '• 6,000 km from Nairobi to South Africa on solar alone\n' +
+      '• A 900 km border-to-border ride from Malaba to Mombasa\n' +
+      '• 1,600 km from Nairobi to Addis Ababa\n' +
+      'Want to try one yourself?' },
+
+    { c:'general_roam', a:
+      'Roam designs and builds electric vehicles for Africa, in Africa.\n' +
+      '• Based in Nairobi, Kenya\n' +
+      '• Roam Air is our electric motorcycle, built for commercial riders\n' +
+      '• Over 7,000 motorcycles built to date\n' +
+      'What would you like to know about?' }
+  ];
+
+  /* ==========================================================================
+     INTENT CLASSIFIER
+     Ordered most specific first. The first match decides which category the
+     question belongs to, and retrieval is then limited to that category.
+     If nothing matches, the assistant escalates rather than guessing.
+     ========================================================================== */
+  var INTENTS = [
+    // Urgent and unambiguous first
+    { c:'fault',         m:/not (working|charging|starting)|won'?t (start|charge|turn on)|broken|faulty|fault\b|stopped working|problem with my|my bike (is|has)|error code|warning light/ },
+    { c:'theft',         m:/stolen|theft|thief|robbed|snatched|lost my (bike|battery)/ },
+    { c:'hours',         m:/what time|opening hours|open(ing)? time|when (do|are) you (open|close)|are you open|closing time|working hours|business hours|open on (saturday|sunday|weekend)/ },
+    { c:'colour',        m:/colou?rs?\b|(have|get|come in|available in|any)[\s\S]{0,14}\b(red|black|white|blue|orange|silver|grey|gray|yellow)\b/ },
+    { c:'test_ride',     m:/test ?ride|book.{0,15}ride|demo ride|try (it|the bike|one|a roam|the roam)\b|ride one\b|take it for a ride|for a ride\b|ride it first|test the bike|try the roam/ },
+    { c:'buses',         m:/\bbus(es)?\b|matatu|shuttle|roam rapid|roam move|coach/ },
+    { c:'careers',       m:/career|\bjob\b|hiring|vacanc|work (at|for) roam|internship|apply for a (job|role)/ },
+
+    // Business enquiries outrank consumer purchase wording
+    { c:'canopy',        m:/canopy|fleet (platform|software|manage|monitor|tracking)|manage my fleet|financier portal|track (my )?fleet/ },
+    { c:'b2b',           m:/\bfleet\b|\bb2b\b|\bbulk\b|corporate|multiple bikes|how many bikes|my (company|business)|our (company|business)|for (a|our|my) (company|business)|business (purchase|deal|pricing|enquiry|options)|work with (businesses|companies)|suppl(y|ier).{0,25}(company|business|fleet)|\d+\s*(bikes|motorcycles)/ },
+
+    { c:'country',       m:/outside kenya|other countr|which countr|abroad|export|international|another country/ },
+
+    // Range before charging, so "distance on a full charge" is a range question
+    { c:'range',         m:/\brange\b|how far|distance on|kilometres? on|km on (one|a|two|full)|one charge\b|mileage|reach how far|how many (km|kilometres|kilometers)|\bdistance\b/ },
+
+    { c:'charging_cost', m:/(charg\w*|electricit\w*|power|unit|kwh)[\s\S]{0,30}(cost|much|price|expensive|spend|tariff|bill|rate)|(cost|much|price|expensive|spend|pay)[\s\S]{0,30}(charg\w*|electricit\w*|kwh)|\bkwh\b|(fill|filling|top up)[\s\S]{0,20}batter/ },
+    { c:'charging_time', m:/(how )?long[\s\S]{0,25}charg|charg\w*[\s\S]{0,15}(time|take|hours?)|full charge|fast charg|charging speed|how (fast|quick)[\s\S]{0,20}charg/ },
+    { c:'home_charging', m:/charg\w*[\s\S]{0,20}(at home|home|house|indoors|wall|socket|outlet|plug)|(home|house|indoors)[\s\S]{0,20}charg|\bplug it in\b|normal socket|standard socket|wall socket|special charger|charg\w*[\s\S]{0,25}where i (live|stay)/ },
+    { c:'solar',         m:/solar|off.?grid|generator|blackout|power (cut|goes off)|no electricity/ },
+    { c:'charging_where',m:/where[\s\S]{0,25}charg|charg\w*[\s\S]{0,20}(station|point|hub|network|location)|roam point|roam hub|swap station|public charging|where.{0,20}(riders )?charge|charging options?\b/ },
+
+    // Purchase family, most specific first
+    { c:'sales_location',m:/\bwhere\b[\s\S]{0,30}\b(buy|get|purchase|order|acquire)\b|\b(buy|get|purchase|order|acquire)\b[\s\S]{0,30}\bwhere\b|where (can|do) i (buy|get)|which shop.{0,20}(buy|get)|find a roam (air|bike|motorcycle)/ },
+    { c:'financing',     m:/financ|loan|deposit|instal(l)?ment|hire purchase|pay.{0,10}(month|daily|day)|m.?kopa|watu|rafiki|platinum credit|fortune credit|credit\b|afford|own the bike|how much[\s\S]{0,20}(to start|to begin|do i need|upfront|down)|get started|what do i need to (start|begin)/ },
+    { c:'pricing',       m:/\bprice\b|pricing|cost of the bike|how much (is|for|does)[\s\S]{0,25}(bike|roam|motorcycle|it|cost)|cash price|buy it outright|\brrp\b|what does it cost|how much is it|\b(roam|roam air|bike|motorcycle)\s+how much/ },
+    { c:'buy',           m:/\b(buy|buying|purchase|purchasing|order|acquire)\b|\bi want\b(?!\s+to (know|understand|ask|check|confirm|see if|hear))|\bcan i (get|have|own|take)\b|\bget one\b|\bhow (do|can) i (get|own|order)\b|\bown one\b|\bi need a (roam|bike|motorcycle)\b/ },
+
+    { c:'savings',       m:/save|saving|cheaper|petrol|fuel cost|compare.{0,15}(petrol|fuel)|versus (petrol|fuel)|swap.{0,12}(cost|cheaper)/ },
+    { c:'battery_owner', m:/own[\s\S]{0,20}batter|batter[\s\S]{0,20}(mine|own|belong|include|lease|rent)|swap(ping)?\b|rent the batter|lease the batter|keep the batter|pay for the batter|\bown (it|them) outright\b/ },
+    { c:'battery_specs', m:/batter[\s\S]{0,25}(weigh|heavy|kg|size|spec|type|made|casing|waterproof|ip67|volt|72v|remov)|(weigh|heavy|how big)[\s\S]{0,20}batter|batter[\s\S]{0,20}(life|last|degrad|cycle|replac|health)|how long[\s\S]{0,20}batter/ },
+    { c:'performance',   m:/how fast|top speed|acceleration|\btorque\b|\bmotor\b|horsepower|\bpower\b|climb|hill|riding mode|\bspecs?\b|specification/ },
+    { c:'payload',       m:/payload|carry|\bload\b|luggage|cargo|goods|passenger|pillion|\bboda\b|delivery box|how much weight/ },
+    { c:'durability',    m:/\brain\b|raining|rainy|\bwet\b|\bwater\b|waterproof|bad weather|wet weather|flood|\bdust\b|\bmud\b|durab|tough|rough road|bad road|pothole|vibration|submerg/ },
+    { c:'service',       m:/servic(e|ing)|maintain|maintenance|repair|spare part|breakdown|mechanic|garage|oil change|spark plug|tune.?up/ },
+    { c:'warranty',      m:/warrant|guarantee/ },
+    { c:'legal',         m:/licen[cs]e|registration|logbook|number plate|ntsa|road.?legal|insur/ },
+    { c:'resale',        m:/resale|resell|second hand|trade in|used bike|resell value/ },
+    { c:'delivery',      m:/how long.{0,20}deliver|deliver|collect|pick (it )?up|in stock|lead time|when can i get|availab(le|ility) now/ },
+    { c:'technology',    m:/\bgps\b|telemetr|track(ing)?\b|roam app|remote shut|connected|iot|regenerative|explorer/ },
+    { c:'manufacturing', m:/manufactur|roam park|made in|where.{0,20}(made|built|assembl)|factory|production|assembl/ },
+    { c:'upcountry',     m:/upcountry|rural|village|outside nairobi|my town|shags|\bcounty\b/ },
+    { c:'rider_stories', m:/rider stor|testimonial|real rider|who (uses|rides)|success stor|expedition|6,?000 ?km|addis|malaba/ },
+    { c:'locations',     m:/where (are|is) (you|your|roam)|your (shop|shops|office|offices|location|locations|branch|branches)|roam shop|showroom|service cent(re|er)|where can i (find|see|visit)/ },
+    { c:'general_roam',  m:/what is roam|who (are|is) roam|about roam|tell me about roam|^what do you (do|sell|make)\s*\??$|roam electric/ }
+  ];
+
+  /* Questions the knowledge base does not hold verified answers for. These are
+     escalated by category rather than answered from general knowledge. */
+  var NOT_APPROVED = [
+    { m:/\bkwh\b[\s\S]{0,20}(batter|capacit)|batter[\s\S]{0,20}capacit|how many kwh|battery size in kwh/,       f:'technical' },
+    { m:/cycle life|how many (charge )?cycles|charge cycles|degrad/,                                            f:'technical' },
+    { m:/(after|past|beyond)[\s\S]{0,15}100,?000 ?km|replace.{0,20}batter.{0,20}cost|cost.{0,20}replace.{0,20}batter|new battery (cost|price)/, f:'technical' },
+    { m:/charger[\s\S]{0,20}(amp|input|watt|volt)|how many (amps|watts)|ac input/,                               f:'technical' },
+    { m:/servic(e|ing)[\s\S]{0,20}(cost|price|much|interval|every|schedule)|(cost|price|much)[\s\S]{0,20}servic(e|ing)/, f:'technical' },
+    { m:/warrant[\s\S]{0,25}(cover|exclude|void|claim|eligib)|is (this|that|it) covered/,                        f:'account'   },
+    { m:/(am i|do i|will i|would i)[\s\S]{0,25}(qualif|eligib|approv)|credit (check|score)|early settle|pay (it )?off early|clear (the|my) loan early|hidden (fee|charge)|extra (fee|charge)|other (fees|charges)/, f:'financing' },
+    { m:/discount|promo(tion|tional)?\b|special offer|\bany offers?\b|offers?\s+(on|available|running|right now)|deal on|on sale\b|black friday|coupon|voucher/, f:'promotion' },
+    { m:/my (data|information|privacy)|data protection|gdpr|who sees my|store my (data|number)/,                 f:'account'   },
+    { m:/(work|use|function)[\s\S]{0,25}(offline|no network|without network|no signal)|\bsms\b/,                 f:'technical' }
   ];
 
   // Buying signals that trigger the lead form
@@ -808,7 +1125,7 @@
      lead sheet, independent of the WhatsApp/call-back lead capture above. */
   function bookRideAction() {
     return '<div class="rai-actions">' +
-      '<a class="rai-action primary" href="' + TEST_RIDE_URL + '" target="_blank" rel="noopener">' +
+      '<a class="rai-action primary" href="' + testRideLink() + '" target="_blank" rel="noopener">' +
         '<svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 5.9 2 10.7c0 2.7 1.4 5.1 3.6 6.7v3.3c0 .4.5.7.9.4l3.1-2.1c.8.2 1.6.2 2.4.2 5.5 0 10-3.9 10-8.5S17.5 2 12 2z"/></svg>' +
         'Book your free test ride</a>' +
     '</div>';
@@ -980,6 +1297,9 @@
       userAgent: navigator.userAgent
     };
 
+    // remember them, so the booking form opens already filled in
+    known.name = name; known.phone = phone; known.email = email;
+
     postLead(payload).then(function () {
       leadCaptured = true;
       showLeadDone('confirmed');
@@ -1037,61 +1357,290 @@
     });
   }
 
-  /* Returns { text, unresolved }. `unresolved` means we could not answer from
-     knowledge, so the caller then shows one-tap routes to a human instead of
-     leaving the visitor at a dead end. */
-  function answerLocally(text) {
-    var q = text.toLowerCase(), i;
-    for (i = 0; i < TOPICS.length; i++) {
-      if (TOPICS[i].m.test(q)) return { text: TOPICS[i].a, unresolved: false };
-    }
+  /* ==========================================================================
+     ANSWERING PIPELINE
+       intent detection -> category-constrained retrieval -> relevance check
+       -> answer, or escalation if the category holds no verified answer.
+     A correct "I do not have confirmed information on that" is always better
+     than an irrelevant, inferred or invented answer.
+     ========================================================================== */
 
-    var stop = { what:1,when:1,where:1,which:1,does:1,the:1,and:1,for:1,you:1,your:1,can:1,are:1,
-                 it:1,to:1,of:1,do:1,my:1,me:1,on:1,how:1,much:1,about:1,with:1,have:1,has:1,
-                 get:1,got:1,tell:1,there:1,they:1,this:1,that:1,from:1,will:1,would:1,should:1 };
-    var words = q.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(function (w) {
-      return w.length > 2 && !stop[w];
+  /* --------------------------------------------------------------------------
+     LANGUAGE NORMALISATION
+     Riders do not write formal English. Swahili, Sheng, mixed phrasing, short
+     messages and typos are all rewritten into plain English terms first, so
+     intent classification works on meaning rather than on exact wording.
+     -------------------------------------------------------------------------- */
+  var LEXICON = [
+    // multi-word first, longest first
+    [/\bmi\s+nataka\b/g,        'i want'],
+    [/\bnataka\s+kununua\b/g,   'i want to buy'],
+    [/\bnataka\s+kuchukua\b/g,  'i want to take'],
+    [/\bnaweza\s+kupata\b/g,    'can i get'],
+    [/\bnaeza\s+kupata\b/g,     'can i get'],
+    [/\bnaweza\s+kununua\b/g,   'can i buy'],
+    [/\bnaeza\s+kununua\b/g,    'can i buy'],
+    [/\bkwa\s+siku\b/g,         'per day'],
+    [/\bkila\s+siku\b/g,        'every day'],
+    [/\bni\s+ngapi\b/g,         'how much'],
+    [/\bgharama\s+gani\b/g,     'how much cost'],
+    [/\bbei\s+gani\b/g,         'what price'],
+    // single words
+    [/\bna(e|we)za\b/g,         'can i'],
+    [/\bnataka\b/g,             'i want'],
+    [/\bnahitaji\b/g,           'i need'],
+    [/\bnunua\b|\bkununua\b/g,  'buy'],
+    [/\binauzwa\b|\bmnauza\b/g, 'sell'],
+    [/\bnapata\b|\bkupata\b|\bpata\b/g, 'get'],
+    [/\bkuchukua\b|\bchukua\b/g,'take'],
+    [/\bwapi\b/g,               'where'],
+    [/\biko\b|\bipo\b|\bziko\b/g, 'is'],
+    [/\bngapi\b/g,              'how much'],
+    [/\bbei\b/g,                'price'],
+    [/\bpesa\b/g,               'money'],
+    [/\bmalipo\b/g,             'payment'],
+    [/\bnyumbani\b/g,           'at home'],
+    [/\binacharge\b|\bkucharge\b/g, 'charging'],
+    [/\binafika\b|\bfika\b/g,   'reach how far'],
+    [/\bnaanzia\b/g,            'deposit to start'],
+    [/\bbetri\b/g,              'battery'],
+    [/\bpikipiki\b/g,           'motorcycle'],
+    [/\bduka\b|\bmaduka\b/g,    'shop'],
+    [/\bmoja\b/g,               'one'],
+    [/\bmbili\b/g,              'two'],
+    [/\bhiyo\b|\bhii\b/g,       'that'],
+    [/\bsasa\b/g,               'now'],
+    [/\blini\b/g,               'when'],
+    [/\bvipi\b/g,               'how about'],
+    [/\bmuda\b/g,               'time'],
+    [/\bmzigo\b/g,              'load'],
+    [/\bnini\b/g,               'what'],
+    [/\bkweli\b/g,              'really'],
+    // common typos and shorthand
+    [/\bchargin\b|\bcharjing\b|\bcharginq\b/g, 'charging'],
+    [/\bbatery\b|\bbattry\b|\bbatry\b/g,       'battery'],
+    [/\bfinacing\b|\bfinancin\b|\bfynance\b/g, 'financing'],
+    [/\bmotobike\b|\bmotobyke\b|\bmotorbike\b/g, 'motorcycle'],
+    [/\bhw\b/g, 'how'], [/\bwat\b/g, 'what'], [/\bwher\b/g, 'where'],
+    [/\bpls\b|\bplz\b/g, 'please'], [/\bu\b/g, 'you'], [/\br\b/g, 'are'],
+    [/\bcn\b/g, 'can'], [/\bd\b/g, 'the'], [/\bnid\b/g, 'need']
+  ];
+
+  function normalise(text) {
+    var q = String(text).toLowerCase()
+      .replace(/[’`]/g, "'")
+      .replace(/[^a-z0-9'?\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    for (var i = 0; i < LEXICON.length; i++) q = q.replace(LEXICON[i][0], LEXICON[i][1]);
+    return q.replace(/\s+/g, ' ').trim();
+  }
+
+  /* Genuinely ambiguous: "Roam iko wapi?" could mean a shop to buy from, a
+     charging point, or head office. One short clarification, not a guess and
+     not an escalation. */
+  var AMBIGUOUS = /^(roam\s+)?(is\s+)?where\s*\??$|^where\s+(is|are)\s+roam\s*\??$|^roam\s*\??$|^where\s*\??$/;
+
+  var STOP = { what:1,when:1,where:1,which:1,does:1,the:1,and:1,for:1,you:1,your:1,can:1,are:1,
+               it:1,to:1,of:1,do:1,my:1,me:1,on:1,how:1,much:1,about:1,with:1,have:1,has:1,
+               get:1,got:1,tell:1,there:1,they:1,this:1,that:1,from:1,will:1,would:1,should:1,
+               is:1,in:1,at:1,a:1,an:1,any:1,please:1,roam:1 };
+
+  function tokens(q) {
+    return q.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(function (w) {
+      return w.length > 2 && !STOP[w];
     });
-    var best = null, bestScore = 0;
+  }
+
+  function titleCase(s) {
+    return s.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function topicFor(cat) {
+    for (var i = 0; i < TOPICS.length; i++) if (TOPICS[i].c === cat) return TOPICS[i].a;
+    return null;
+  }
+
+  /* Retrieval is limited to one category and must clear a real score, so a
+     question is never answered with a fact from a different subject. */
+  function bestFaqIn(cat, q) {
+    var words = tokens(q), best = null, bestScore = 0;
     FAQ.forEach(function (f) {
-      var hq = f.q.toLowerCase(), ha = f.a.toLowerCase(), score = 0;
+      if (f.c !== cat) return;
+      var hq = f.q.toLowerCase(), score = 0;
       words.forEach(function (w) {
         var s = w.length > 5 ? w.slice(0, 5) : w;
         if (hq.indexOf(s) !== -1) score += s.length * 2;
-        else if (ha.indexOf(s) !== -1) score += s.length;
       });
       if (score > bestScore) { bestScore = score; best = f; }
     });
-    if (best && bestScore >= 8) return { text: best.a, unresolved: false };
-
-    // No dead ends. Always route to a person who can answer properly.
-    return {
-      unresolved: true,
-      text:
-        'Good question, and I want to get it exactly right for you rather than guess.\n' +
-        'The team can answer this straight away:\n' +
-        '• WhatsApp is usually fastest, replies within minutes\n' +
-        '• Call ' + PHONE + ', Mon–Fri 9am–5pm\n' +
-        '• Or leave your number and a rep will come back to you\n' +
-        'Pick whichever suits you below.'
-    };
+    return bestScore >= 10 ? best : null;
   }
 
-  function triggerCards(l) {
-    var out = [];
-    function add(k) { if (out.indexOf(k) === -1) out.push(k); }
-    if (/expedition|solar|stellenbosch|south africa/.test(l)) add('solar expedition');
-    if (/manufactur|roam park|made in africa|production|assembl/.test(l)) add('roam park');
-    if (/border|900 ?km/.test(l)) add('border to border');
-    if (/addis|1,?600/.test(l)) add('nairobi addis');
-    if (/gen ?2|second gen/.test(l)) add('gen 2');
-    if (/fast.?charg|100,?000 ?km/.test(l)) add('fast charging battery');
-    if (/truck|run over|durab|tough/.test(l)) add('truck test');
-    if (/explorer|fleet|monitor/.test(l)) add('roam explorer');
-    if (/service cent(er|re)|ride.?in|after.?sales|repair|servicing/.test(l)) add('service center');
-    if (/charg|hub|roam point|plug/.test(l) && out.indexOf('fast charging battery') === -1) add('charging');
-    return out;
+  var LOC_FRAME = /where (are|is) (you|your|roam)|are (you|there|roam)\b[\s\S]{0,20}\b(in|at|near)\b|is (roam|there)\b[\s\S]{0,25}\b(in|at|near)\b|do (you|they) have\b[\s\S]{0,30}\b(in|at|near)\b|(shop|shops|hub|hubs|branch|branches|outlet|dealer|showroom|store|office|roam point|service cent(re|er))s?\b[\s\S]{0,12}\b(in|at|near)\b|nearest (shop|hub|point|branch|dealer|outlet|store|service)|available (in|at)|located (in|at)|operate (in|at)|coverage (in|at)|present in|presence in/;
+
+  /* Returns a place name, '' when the phrase is not a place at all, or null
+     when the question contains no place phrase. */
+  function extractPlace(q) {
+    // "nearest hub to Mombasa", "closest shop from Nakuru"
+    var m = q.match(/\b(?:nearest|closest)\b[a-z ]{0,24}?\b(?:to|from|in|at|near)\s+([a-z][a-z' -]{2,32})/);
+    if (!m) m = q.match(/\b(?:in|at|near|around)\s+([a-z][a-z' -]{2,32})/);
+    if (!m) return null;
+    var raw = m[1].split(/[?.,!]/)[0].trim().split(/\s+/).slice(0, 3).join(' ');
+    if (!raw || NOT_A_PLACE.test(raw.split(/\s+/)[0])) return '';
+    return raw;
   }
+
+  /* Country availability. Never speculate about a market that is not active. */
+  function countryAnswer(q) {
+    var m = q.match(OTHER_COUNTRY);
+    if (!m) return null;
+    return { text: FALLBACK.country.replace('{x}', titleCase(m[0])),
+             unresolved: true, forced: true, cat: 'country' };
+  }
+
+  /* Location availability. A place that is not in the approved database is
+     unknown, and unknown means escalate. It is never turned into a product
+     answer, a nearby town, or an implied presence. */
+  function locationAnswer(q) {
+    if (!LOC_FRAME.test(q)) return null;
+    // "are you open at 8am" is a question about hours, not about a place
+    if (/what time|when (do|are) you|\bopen(ing|s)?\b|\bclos(e|ed|ing)\b|\d\s?(am|pm)\b|o'?clock|business hours|working hours/.test(q)) return null;
+    var i;
+    for (i = 0; i < PLACES.length; i++) {
+      if (PLACES[i].k.test(q)) return { text: PLACES[i].a, unresolved: false, cat: 'locations' };
+    }
+    var p = extractPlace(q);
+    if (p === '') return null;                       // "are you in stock", not a place
+    if (p === null || ACTIVE_COUNTRY.test(q)) {      // "where are you located"
+      return { text: topicFor('locations'), unresolved: false, cat: 'locations' };
+    }
+    return { text: FALLBACK.location.replace('{x}', titleCase(p)),
+             unresolved: true, forced: true, cat: 'locations' };
+  }
+
+  /* Do the maths for them, using only the approved KES 1 per kilometre figure.
+     Never invents an electricity tariff or a petrol price. */
+  function calcAnswer(q) {
+    if (!/(cost|spend|much|save|saving|pay|budget)/.test(q)) return null;
+    var m = q.match(/(\d{1,4})\s*(?:km|kilometre|kilometer)/);
+    if (!m) return null;
+    var km = parseInt(m[1], 10);
+    if (!km || km > 2000) return null;
+    var month = km * 30;
+    function money(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    return { unresolved: false, cat: 'charging_cost', text:
+      'At ' + money(km) + ' km a day, here is roughly what charging costs you.\n' +
+      '• About KES ' + money(km) + ' a day, at about KES 1 per kilometre at home\n' +
+      '• About KES ' + money(month) + ' a month\n' +
+      '• You would need ' + (km > 80 ? 'two batteries' : 'one battery') + ' for that distance\n' +
+      'Tell me what you spend on petrol now and I will show you the difference.' };
+  }
+
+  /* Last chance before escalating. A question phrased differently from the FAQ
+     is still the same question, so search FAQ titles across all categories.
+     Deliberately strict: two or more distinctive words must line up, so this
+     rescues real paraphrases without resurrecting loose keyword matching. */
+  function paraphraseFaq(q) {
+    var words = tokens(q), best = null, bestScore = 0;
+    if (words.length < 2) return null;
+    FAQ.forEach(function (f) {
+      var hq = f.q.toLowerCase(), score = 0, hits = 0;
+      words.forEach(function (w) {
+        var s = w.length > 5 ? w.slice(0, 5) : w;
+        if (hq.indexOf(s) !== -1) { score += s.length * 2; hits++; }
+      });
+      if (hits >= 2 && score > bestScore) { bestScore = score; best = f; }
+    });
+    return bestScore >= 16 ? best : null;
+  }
+
+  /* The last category answered, so a short follow-up stays on topic instead of
+     being read as a brand new, unrelated question. */
+  var lastCat = null;
+  var FOLLOW_UP = /^(what|how) (if|about)|^and\b|^what about|^how about|^ok(ay)? (and|what)|^then\b|^so\b/;
+
+  /* Returns { text, unresolved, forced, cat }.
+     `unresolved` shows the one-tap routes to a human.
+     `forced` means the guardrails answered and no model may override it. */
+  function answerLocally(text) {
+    var q = normalise(text), i, r;
+
+    // Medium confidence: two readings are genuinely plausible. Ask once.
+    if (AMBIGUOUS.test(q)) {
+      lastCat = null;
+      return { unresolved: false, forced: true, cat: 'clarify', text:
+        'Happy to help, just so I point you to the right place.\n' +
+        '• Are you looking for a shop to buy from or test ride?\n' +
+        '• Or somewhere to charge?\n' +
+        '• Or our office?\n' +
+        'Tell me which and I will give you the details.' };
+    }
+
+    r = countryAnswer(q);  if (r) { lastCat = r.cat; return r; }
+    r = locationAnswer(q); if (r) { lastCat = r.cat; return r; }
+    r = calcAnswer(q);     if (r) { lastCat = r.cat; return r; }
+
+    for (i = 0; i < NOT_APPROVED.length; i++) {
+      if (NOT_APPROVED[i].m.test(q)) {
+        return { text: FALLBACK[NOT_APPROVED[i].f], unresolved: true, forced: true, cat: 'unknown' };
+      }
+    }
+
+    // High confidence: the question classifies into one category.
+    var cat = null;
+    for (i = 0; i < INTENTS.length; i++) {
+      if (INTENTS[i].m.test(q)) { cat = INTENTS[i].c; break; }
+    }
+
+    /* A follow-up continues the previous subject. "What if I want two
+       batteries?" after a price question is still about price, not a fresh
+       purchase enquiry. A follow-up that names its own specific subject
+       ("what about financing?") still wins. */
+    if (FOLLOW_UP.test(q) && lastCat && (!cat || cat === 'buy' || cat === 'general_roam')) {
+      cat = lastCat;
+    }
+
+    // Same question, different words. Not an unknown question.
+    if (!cat) {
+      var p = paraphraseFaq(q);
+      if (p) { lastCat = p.c; return { text: p.a, unresolved: false, cat: p.c }; }
+    }
+
+    // Low confidence: genuinely unsupported. Escalate.
+    if (!cat) return { text: FALLBACK.general, unresolved: true, forced: true, cat: 'unknown' };
+
+    lastCat = cat;
+    if (cat === 'colour') return { text: FALLBACK.colour, unresolved: true, forced: true, cat: cat };
+    if (cat === 'hours')  return { text: FALLBACK.hours,  unresolved: true, forced: true, cat: cat };
+    if (cat === 'fault')  return { text: FALLBACK.fault,  unresolved: true, forced: true, cat: cat };
+
+    var f = bestFaqIn(cat, q);
+    if (f) return { text: f.a, unresolved: false, cat: cat };
+
+    var t = topicFor(cat);
+    if (t) return { text: t, unresolved: false, cat: cat };
+
+    return { text: FALLBACK.general, unresolved: true, forced: true, cat: cat };
+  }
+
+  /* Story cards are tied to the classified category, so an answer can never be
+     illustrated with a card about an unrelated subject. */
+  var CARDS = {
+    solar:          ['solar expedition'],
+    manufacturing:  ['roam park'],
+    rider_stories:  ['border to border', 'nairobi addis'],
+    durability:     ['truck test'],
+    charging_where: ['charging'],
+    charging_time:  ['fast charging battery'],
+    battery_specs:  ['fast charging battery'],
+    canopy:         ['roam explorer'],
+    b2b:            ['roam explorer'],
+    service:        ['service center'],
+    locations:      ['service center'],
+    sales_location: ['service center'],
+    technology:     ['roam explorer']
+  };
 
   function handle(text) {
     if (!text || !text.trim() || busy) return;
@@ -1107,33 +1656,48 @@
     $('rai-input').value = '';
     var l = text.toLowerCase();
 
-    triggerCards(l).forEach(function (k) { row(mediaCard(k), 'bot'); });
-    if (/financ|loan|deposit|instal|payment|price|pricing|cost|how much|afford|own/.test(l)) row(financingCard(), 'bot');
+    /* Classify first. The category decides what is shown alongside the answer,
+       so a question can never be illustrated with an unrelated card. */
+    var local = answerLocally(text);
+    var cat   = local.cat;
+
+    if (!local.forced) {
+      (CARDS[cat] || []).forEach(function (k) { row(mediaCard(k), 'bot'); });
+      if (cat === 'financing' || cat === 'pricing' || cat === 'buy') row(financingCard(), 'bot');
+      if (cat === 'test_ride') row(bookRideAction(), 'bot');
+    }
     if (/faq|frequently asked|common question|^questions?$|^help$/.test(l)) row(faqCard(), 'bot');
-    var wantsTestRide = /test ?ride|book.*ride|demo ride|try it out|showroom visit/.test(l);
-    if (wantsTestRide) row(bookRideAction(), 'bot');
+
+    function finish(reply) {
+      row('<div class="rai-bubble">' + formatResponse(reply.text) + '</div>', 'bot');
+      if (reply.unresolved) {
+        row(quickActions(text), 'bot');   // never leave the visitor at a dead end
+      } else {
+        maybeOfferLead(text);
+      }
+      busy = false;
+      $('rai-send').disabled = false;
+      if (!isTouch()) $('rai-input').focus();
+    }
+
+    /* Guardrailed answers are final. No model is asked, so no model can turn an
+       unknown location, country, price or spec into an invented answer. */
+    if (local.forced) {
+      history_.push({ role: 'user', content: text });
+      history_.push({ role: 'assistant', content: local.text });
+      finish(local);
+      return;
+    }
 
     var typing = row('<div class="rai-typing"><i></i><i></i><i></i></div>', 'bot');
 
     askBackend(text).catch(function () {
       // offline path still records the reply, so the lead transcript is complete
-      var a = answerLocally(text);
-      history_.push({ role: 'assistant', content: a.text });
-      return a;
+      history_.push({ role: 'assistant', content: local.text });
+      return local;
     }).then(function (reply) {
       typing.remove();
-      row('<div class="rai-bubble">' + formatResponse(reply.text) + '</div>', 'bot');
-
-      if (reply.unresolved) {
-        // never leave the visitor at a dead end
-        row(quickActions(text), 'bot');
-      } else {
-        maybeOfferLead(text);
-      }
-
-      busy = false;
-      $('rai-send').disabled = false;
-      if (!isTouch()) $('rai-input').focus();
+      finish(reply);
     });
   }
 
