@@ -1291,6 +1291,35 @@
 '.rai-eyebrow{display:flex;align-items:center;gap:8px;font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--orange);margin-bottom:9px;}',
 '.rai-eyebrow::before{content:"";width:16px;height:1px;background:var(--orange);flex-shrink:0;}',
 
+/* A panel that can run a whole screen tall folds away from its own header.
+   The header stays a header: same eyebrow rule, plus a hit area, a count that
+   still reads when the body is away, and a chevron that turns. */
+/* The eyebrow is a 9.5px line, which is nowhere near a thumb. The padding is
+   what a finger actually lands on; the negative margin pulls the text back to
+   where the eyebrow always sat, so the header looks unchanged. */
+'button.rai-eyebrow{width:100%;background:none;border:0;padding:9px 0;margin:-7px 0 3px;',
+'  font-family:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;}',
+'button.rai-eyebrow:hover .rai-fold-t{color:var(--white);}',
+'button.rai-eyebrow:focus-visible{outline:2px solid var(--orange);outline-offset:3px;border-radius:6px;}',
+'.rai-fold-t{color:var(--orange);transition:color .16s ease;}',
+'.rai-fold-n{margin-left:auto;font-size:9.5px;font-weight:600;letter-spacing:.06em;',
+'  text-transform:none;color:var(--faint);}',
+'.rai-fold-chev{flex-shrink:0;width:15px;height:15px;line-height:15px;text-align:center;',
+'  font-size:11px;color:var(--faint);transition:transform .22s cubic-bezier(.2,.8,.2,1),color .16s ease;}',
+'button.rai-eyebrow:hover .rai-fold-chev{color:var(--orange);}',
+'.rai-panel.rai-folded .rai-fold-chev{transform:rotate(-90deg);}',
+'.rai-panel.rai-folded{padding-top:11px;padding-bottom:4px;}',
+'.rai-panel.rai-folded > .rai-fold-body{display:none;}',
+'.rai-panel.rai-folded > button.rai-eyebrow{margin-bottom:0;}',
+/* A result list is a bare stack of cards, not a boxed panel, so its own
+   header must not inherit the box padding when it folds shut. */
+'.rai-hub-result.rai-folded{padding:0;}',
+/* Coming back to a panel that is already on screen: a short pulse, so the
+   rider can see which one the tap took them to. */
+'@keyframes raiFlash{0%{box-shadow:0 0 0 0 rgba(237,125,49,.42);}',
+'  100%{box-shadow:0 0 0 9px rgba(237,125,49,0);}}',
+'.rai-panel.rai-flash{border-color:var(--orange);animation:raiFlash .9s ease-out 2;}',
+
 '.rai-lede{font-size:13.5px;line-height:1.55;color:var(--white);}',
 '.rai-lede + .rai-list{margin-top:10px;}',
 '.rai-list{display:flex;flex-direction:column;gap:7px;}',
@@ -1840,14 +1869,81 @@
      is called can open a category and read down the list; every row adds
      straight to the Roam Cart. The search box filters across all categories
      at once and keeps the matching ones open. */
+  /* ==========================================================================
+     FOLDING PANELS
+     The catalogue and the hub finder are the two panels tall enough to bury
+     the conversation above them. Each one folds from its own header, and the
+     conversation only ever holds one of each: asking a second time reopens
+     the panel already on screen and scrolls the rider back to it rather than
+     stacking a duplicate underneath.
+     ========================================================================== */
+
+  var foldState = { parts: false, hubs: false };
+
+  /* The header of a foldable panel. `note` stays visible while folded, so a
+     closed panel still says what is inside it. */
+  function foldHead(label, key, note) {
+    var shut = !!foldState[key];
+    return '<button class="rai-eyebrow" data-fold="' + key + '" type="button" ' +
+      'aria-expanded="' + (shut ? 'false' : 'true') + '">' +
+      '<span class="rai-fold-t">' + label + '</span>' +
+      (note ? '<span class="rai-fold-n">' + esc(note) + '</span>' : '') +
+      '<span class="rai-fold-chev">&#9662;</span></button>';
+  }
+
+  /* Not every engine that runs this widget has scrollIntoView, and none of
+     them agree on the options object, so the position is a best effort and
+     never something the rest of the panel logic waits on. */
+  function scrollPanelTo(panel, block) {
+    if (!panel || typeof panel.scrollIntoView !== 'function') return;
+    try { panel.scrollIntoView({ behavior: 'smooth', block: block }); }
+    catch (err) {
+      try { panel.scrollIntoView(); } catch (err2) { /* nothing more to try */ }
+    }
+  }
+
+  /* Walk back to a panel that is already in the conversation and mark it, so
+     the tap has somewhere visible to land. */
+  function revealPanel(panel) {
+    if (!panel) return;
+    panel.classList.remove('rai-flash');
+    void panel.offsetWidth; /* restart the pulse if it is still running */
+    panel.classList.add('rai-flash');
+    setTimeout(function () { panel.classList.remove('rai-flash'); }, 1900);
+    /* Anything the answer adds after the panel — a lead offer, a quick action
+       — scrolls the thread to the bottom as it lands. Wait that out, or the
+       walk back up is undone the moment it finishes. */
+    setTimeout(function () { scrollPanelTo(panel, 'start'); }, 420);
+  }
+
+  /* True when the panel was already on screen and has been reused. `render`
+     is called only once the fold has been cleared, so coming back to a panel
+     always hands it back open — and it is called at all so that reuse shows
+     current state, since the question that asked for it a second time may
+     have moved the filters. */
+  function reusePanel(sel, key, render) {
+    var found = document.querySelectorAll(sel);
+    if (!found.length) return false;
+    foldState[key] = false; /* asking for it again means wanting to see it */
+    found[found.length - 1].outerHTML = render();
+    var now = document.querySelectorAll(sel);
+    revealPanel(now[now.length - 1]);
+    return true;
+  }
+
   function partsBrowser(filter) {
     var groups = partsByCategory(filter);
     var f = (filter || '').trim();
     var shown = 0;
     groups.forEach(function (g) { shown += g.items.length; });
 
-    var h = '<div class="rai-panel rai-catalogue" data-catalogue>' +
-      '<div class="rai-eyebrow">🔧 Roam Parts</div>' +
+    var note = f ? shown + ' match' + (shown === 1 ? '' : 'es')
+                 : 'over 100 parts';
+
+    var h = '<div class="rai-panel rai-catalogue' + (foldState.parts ? ' rai-folded' : '') +
+        '" data-catalogue>' +
+      foldHead('🔧 Roam Parts', 'parts', note) +
+      '<div class="rai-fold-body">' +
       '<div class="rai-cat-search">' +
         '<svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.5 10.9l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>' +
         '<input type="text" id="rai-cat-q" placeholder="Search parts, part numbers or what’s broken" ' +
@@ -1856,7 +1952,7 @@
 
     if (!groups.length) {
       return h + '<div class="rai-cat-empty">Nothing in the catalogue matches &ldquo;' + esc(f) + '&rdquo;.<br>' +
-        'Try a simpler word such as &ldquo;brake&rdquo;, or WhatsApp Roam on ' + PHONE + ' and the team will find it.</div></div>';
+        'Try a simpler word such as &ldquo;brake&rdquo;, or WhatsApp Roam on ' + PHONE + ' and the team will find it.</div></div></div>';
     }
 
     /* Browsing the whole catalogue reads "over 100 parts" rather than an exact
@@ -1887,7 +1983,7 @@
       });
       h += '</div></div>';
     });
-    return h + '</div>';
+    return h + '</div></div>';
   }
 
   /* ==========================================================================
@@ -1929,10 +2025,15 @@
       '<div class="rai-hub-acts">' + acts + '</div></div>';
   }
 
+  /* A short answer keeps its cards bare; once the list is long enough to push
+     the answer off the screen it gets a header it can fold back into. */
   function hubCards(hs, full) {
     if (!hs.length) return '';
-    return '<div class="rai-panel rai-hub-list">' +
-      hs.map(function (h) { return hubCard(h, full); }).join('') + '</div>';
+    var cards = hs.map(function (h) { return hubCard(h, full); }).join('');
+    if (hs.length <= 3) return '<div class="rai-panel rai-hub-list">' + cards + '</div>';
+    return '<div class="rai-panel rai-hub-list rai-hub-result">' +
+      foldHead('📍 Matching locations', 'list', hs.length + ' location' + (hs.length === 1 ? '' : 's')) +
+      '<div class="rai-fold-body">' + cards + '</div></div>';
   }
 
   /* Which stations the finder is currently showing, given its own state. */
@@ -1972,8 +2073,12 @@
         '" data-hub-filter="' + k + '">' + SERVICE_TAGS[k] + '</button>';
     }
 
-    var h = '<div class="rai-panel rai-hubs" data-hubfinder>' +
-      '<div class="rai-eyebrow">📍 Find a Roam Hub</div>' +
+    var note = rows.length + ' location' + (rows.length === 1 ? '' : 's');
+
+    var h = '<div class="rai-panel rai-hubs' + (foldState.hubs ? ' rai-folded' : '') +
+        '" data-hubfinder>' +
+      foldHead('📍 Find a Roam Hub', 'hubs', note) +
+      '<div class="rai-fold-body">' +
       '<div class="rai-hub-tabs">' + tab('near', s.origin ? 'Near ' + esc(s.origin.n) : 'Nearest to me') +
         tab('nairobi', 'Nairobi') + tab('outside', 'Outside Nairobi') + tab('all', 'All') + '</div>' +
       '<div class="rai-cat-search">' +
@@ -1984,7 +2089,7 @@
 
     if (!rows.length) {
       return h + '<div class="rai-cat-empty">No Roam location in my current data matches that.<br>' +
-        'Clear a filter, or WhatsApp Roam on ' + PHONE + ' and the team will confirm.</div></div>';
+        'Clear a filter, or WhatsApp Roam on ' + PHONE + ' and the team will confirm.</div></div></div>';
     }
 
     h += '<div class="rai-cat-count">' + rows.length + ' Roam location' +
@@ -1993,7 +2098,7 @@
     if (rows.length > shown.length) {
       h += '<button class="rai-hub-more" data-hub-more>Show all ' + rows.length + ' locations</button>';
     }
-    return h + '</div>';
+    return h + '</div></div>';
   }
 
   /* Re-render the panel in place. `from` is any element inside it. */
@@ -3641,11 +3746,17 @@
       if (reply.ui === 'part' && reply.part) { row(partCard(reply.part), 'bot'); showedPanel = true; }
       else if (reply.ui === 'checklist' && reply.items) { row(checklistCard(reply.items), 'bot'); showedPanel = true; }
       else if (reply.ui === 'cart' || reply.ui === 'quote') { row(cartDrawer(), 'bot'); showedPanel = true; }
-      else if (reply.ui === 'partsIntro') { row(partsBrowser(), 'bot'); showedPanel = true; }
+      else if (reply.ui === 'partsIntro') {
+        if (!reusePanel('[data-catalogue]', 'parts', partsBrowser)) row(partsBrowser(), 'bot');
+        showedPanel = true;
+      }
       else if (reply.ui === 'hubs' && reply.hubs && reply.hubs.length) {
         row(hubCards(reply.hubs, reply.full), 'bot'); showedPanel = true;
       }
-      else if (reply.ui === 'hubFinder') { row(hubFinder(), 'bot'); showedPanel = true; }
+      else if (reply.ui === 'hubFinder') {
+        if (!reusePanel('[data-hubfinder]', 'hubs', hubFinder)) row(hubFinder(), 'bot');
+        showedPanel = true;
+      }
       if (reply.ui === 'quote' && cart.length) row(quoteForm(), 'bot');
       updateCartBadge();
 
@@ -3842,8 +3953,27 @@
         return;
       }
 
+      // ---- fold a tall panel away from its own header ---------------------
+      var foldBtn = e.target.closest('[data-fold]');
+      if (foldBtn) {
+        var fKey = foldBtn.getAttribute('data-fold');
+        var fPanel = foldBtn.closest('.rai-panel');
+        if (!fPanel) return;
+        var nowShut = !fPanel.classList.contains('rai-folded');
+        fPanel.classList.toggle('rai-folded', nowShut);
+        foldBtn.setAttribute('aria-expanded', nowShut ? 'false' : 'true');
+        /* Only the two panels the conversation keeps one of are remembered;
+           a result list folds for itself and is never redrawn. */
+        if (fKey === 'parts' || fKey === 'hubs') foldState[fKey] = nowShut;
+        /* Folding from halfway down leaves the header off screen, so bring
+           the panel back to where the rider can see what they just closed. */
+        scrollPanelTo(fPanel, nowShut ? 'center' : 'start');
+        return;
+      }
+
       // ---- open the full catalogue from the home screen -------------------
       if (e.target.closest('[data-open-catalogue]')) {
+        if (reusePanel('[data-catalogue]', 'parts', partsBrowser)) return;
         row('<div class="rai-bubble">' + formatResponse(
           'Here is the full Roam parts catalogue. Open a section, or search if you already know what you are after.') +
           '</div>', 'bot');
@@ -3853,6 +3983,7 @@
       // ---- open the hub finder from the home screen -----------------------
       if (e.target.closest('[data-open-hubs]')) {
         setFinder({});
+        if (reusePanel('[data-hubfinder]', 'hubs', hubFinder)) return;
         row('<div class="rai-bubble">' + formatResponse(
           'Here are the Roam locations I have. Filter by what you need, search an area, ' +
           'or tap Nearest to me and I will rank them from where you are.') + '</div>', 'bot');
@@ -3956,7 +4087,10 @@
         return;
       }
       var cs = e.target.closest('[data-continue-shopping]');
-      if (cs) { row(partsBrowser(), 'bot'); return; }
+      if (cs) {
+        if (!reusePanel('[data-catalogue]', 'parts', partsBrowser)) row(partsBrowser(), 'bot');
+        return;
+      }
     });
 
     /* Live filtering inside the catalogue. The panel is replaced in place and
