@@ -89,7 +89,11 @@
   #ra-roam-widget .save-strip .item .k{ font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.05em; }
   #ra-roam-widget .save-strip .item .v{ font-size:26px; font-weight:800; color:var(--accent-text); }
   #ra-roam-widget .phase-compare{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:22px 0 4px; }
-  #ra-roam-widget .phase-col{ background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px; }
+  /* Grid tracks default to min-width:auto, so a column will not shrink below
+     its content's natural width. The "During / After" labels and figures are
+     long enough that at 1fr 1fr this pushed the whole widget wider than the
+     phone it was on, and it scrolled the page sideways instead of wrapping. */
+  #ra-roam-widget .phase-col{ background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px; min-width:0; }
   #ra-roam-widget .phase-head{ font-size:12.5px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--text); background:rgba(237,125,49,0.14); border:1px solid rgba(237,125,49,0.38); padding:6px 12px; border-radius:999px; display:inline-block; margin-bottom:14px; }
   #ra-roam-widget .prow{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
   #ra-roam-widget .prow:last-of-type{ border-bottom:none; }
@@ -104,17 +108,22 @@
   #ra-roam-widget .phase-save .ps-item .v{ font-weight:700; color:var(--accent-text); white-space:nowrap; font-variant-numeric:tabular-nums; }
   #ra-roam-widget .phase-save .ps-item.full .v{ font-size:19px; }
   @media(max-width:640px){
-    #ra-roam-widget .phase-compare{ gap:9px; margin:18px 0 2px; }
-    #ra-roam-widget .phase-col{ padding:12px 13px; }
+    /* Two columns of loan figures side by side is what was overflowing the
+       screen and scrolling the whole page sideways — "During" and "After"
+       now stack, each getting the full width instead of splitting it. */
+    #ra-roam-widget .phase-compare{ grid-template-columns:1fr; gap:12px; margin:18px 0 2px; }
+    #ra-roam-widget .phase-col{ padding:14px 15px; }
     #ra-roam-widget .phase-head{ font-size:11px; padding:5px 10px; margin-bottom:10px; letter-spacing:0.03em; }
-    #ra-roam-widget .prow{ padding:7px 0; }
-    #ra-roam-widget .prow .pl{ font-size:12px; }
-    #ra-roam-widget .prow .pv{ font-size:16px; }
-    #ra-roam-widget .phase-save{ margin-top:9px; padding-top:9px; gap:5px; }
-    #ra-roam-widget .phase-save .ps-item{ font-size:12px; }
-    #ra-roam-widget .phase-save .ps-item.full .v{ font-size:15.5px; }
+    #ra-roam-widget .prow{ padding:8px 0; }
+    #ra-roam-widget .prow .pl{ font-size:13px; }
+    #ra-roam-widget .prow .pv{ font-size:18px; }
+    #ra-roam-widget .phase-save{ margin-top:10px; padding-top:10px; gap:6px; }
+    #ra-roam-widget .phase-save .ps-item{ font-size:13px; }
+    #ra-roam-widget .phase-save .ps-item.full .v{ font-size:17px; }
   }
-  @media(max-width:380px){
+  @media(max-width:340px){
+    /* Only the narrowest phones still need the label and its figure on
+       separate lines now that each column has the full width to itself. */
     #ra-roam-widget .prow{ flex-direction:column; align-items:flex-start; gap:1px; padding:6px 0; }
     #ra-roam-widget .phase-save .ps-item{ flex-direction:column; align-items:flex-start; gap:0; }
   }
