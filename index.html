@@ -64,8 +64,18 @@
   var PHONE          = '+254 740 666 555';
   // Book a Free Test Ride form: responses are recorded straight into Roam's lead sheet.
   // This is the published /d/e/ link from Roam's own FAQ pack, not the /d/ editor link.
+  /* Roam's own Book a Free Test Ride page. It walks the rider through county,
+     area, date and time slot, shows their savings, and posts straight into the
+     test-ride Google Form's responses sheet. Point this at the Webflow page
+     once it is live; the default is the copy published beside this widget. */
   var TEST_RIDE_URL  = CFG.testRideUrl   ||
-    'https://docs.google.com/forms/d/e/1FAIpQLSezb3vfHPb4Gvw0vRi0vcqhmTEcsxWcstYmxh7E3oa4rLZVDQ/viewform';
+    'https://askroam.netlify.app/test-ride.html';
+
+  /* Roam's cost, financing, total-cost-of-ownership and fleet calculators.
+     Cost questions are answered in chat and this is offered as the deeper
+     breakdown, so nobody has to leave the chat to get a number. */
+  var CALCULATOR_URL = CFG.calculatorUrl ||
+    'https://askroam.netlify.app/calculator.html';
 
   /* Optional: carry what the visitor already typed in the chat into the booking
      form, so they land on it with their details filled in and only have to pick
@@ -225,7 +235,7 @@
     { c:'charging_where',  q: 'Where can I charge?',              a: 'At home with the portable charger, at a 24/7 self-service Roam Point, or at a full-service Roam Hub. Roam Hubs are located across Nairobi.' },
     { c:'charging_cost',   q: 'How much does charging cost?',     a: 'About KES 1 per kilometre at home. That is roughly KES 80 to fill one battery for about 80 km, or KES 160 for two batteries and a full 160 km day. Your exact cost depends on your electricity tariff and how you ride.' },
     { c:'charging_cost',   q: 'What does a Roam Point cost?',     a: 'Fast charging at a Roam Point is charged per unit of electricity: KSh 40 per kWh during the day and a discounted KSh 25 per kWh off-peak and overnight. Battery rental at a Roam Hub is KES 20 an hour.' },
-    { c:'charging_time',   q: 'How long does a full charge take?',a: 'About 3 hours for a full charge from a standard wall outlet using the portable charger. At a Roam Point the Gen 3 battery adds over 1 km of range per minute.' },
+    { c:'charging_time',   q: 'How long does a full charge take?',a: 'About 3 to 4 hours for a full charge from a standard wall outlet using the 10A portable charger. At a Roam Point or Roam Hub, fast charging adds over 1 km of range per minute and takes 20 to 80 percent in under 45 minutes.' },
     { c:'range',           q: 'How far can it go on one charge?', a: 'Up to 80 km on one battery and up to 160 km on two, which is about the distance from Nairobi to Nakuru. Real range depends on load, terrain, speed and riding style.' },
     { c:'battery_owner',   q: 'Do I own the battery?',            a: 'Yes. Once your financing is complete you own the motorcycle and the battery outright. No swapping, no waiting, no fees that never end.' },
     { c:'battery_specs',   q: 'How heavy is the battery?',        a: 'About 20 kg, roughly the same as the 20-litre jerrican most homes use for water. It lifts out so you can carry it inside to charge.' },
@@ -303,7 +313,7 @@
     '• Top speed 90 km/h; 0–60 km/h in 6.9 seconds',
     '• 72V dual-battery system, 3,000W rated power, 55 Nm peak torque',
     '• Weight 129–149 kg; max payload 250 kg',
-    '• About 3 hours for a full charge from a standard wall outlet with the portable charger',
+    '• About 3 to 4 hours for a full charge from a standard wall outlet with the 10A portable charger',
     '• At a Roam Point the fast-charging battery adds over 1 km of range per minute',
     '• Battery: removable 72V lithium-ion, about 20 kg, IP67 sealed, industrial-grade aluminium casing',
     '• Battery guaranteed 100,000 km; GPS tracking and smart telemetry built in',
@@ -363,7 +373,7 @@
     '',
     '• Roam Hub, full-service solar-powered stations: fast charging, battery rental (KES 20/hour, under a minute), maintenance and genuine parts. Nine Nairobi hubs: Lusaka, Waiyaki Way, Karambee, Suguta Centre, Outering, Kayole, Roysambu, Adams Arcade, Forest Road.',
     '• Roam Point, 24/7 self-service fast charging, mobile payment or Roam App.',
-    '• Home, included portable charger, about KES 1/km, roughly 3 hours for a full charge, charge overnight.',
+    '• Home, included 10A portable charger, about KES 1/km, roughly 3 to 4 hours for a full charge, safe to charge overnight.',
     '',
     "MANUFACTURING (ROAM PARK): East Africa's largest EV assembly plant, 10,000+ m², up to 50,000 motorcycles/year, 98% robotic welding, inaugurated by Kenya's President July 2023, US university partnership for low-cost robotic welding. Roam has built more than 7,000 motorcycles to date. Designed, built and assembled in Africa, which is why the bike suits African roads, payloads and conditions, and why it builds local jobs, skills and supplier networks.",
     '',
@@ -385,7 +395,23 @@
     '',
     'RULES ON ACCURACY: Only state figures given above. Never invent prices, specs, dates or availability. If you do not know an exact number, do not guess it.',
     '',
-    'NOT YET APPROVED, so never answer these from your own knowledge. Say the team will confirm the exact figure, and offer WhatsApp, phone or a call back: exact battery capacity in kWh, units of electricity per full charge, charger AC input rating, number of charging cycles, battery degradation behaviour, what happens after 100,000 km, replacement battery price, servicing price, service intervals, detailed warranty terms and exclusions, financing eligibility requirements, early settlement, additional fees, exact insurance and health cover included by each financier, exact Canopy and Explorer feature lists, theft-alert specifics, offline and SMS behaviour, and data privacy terms.',
+    'AFTER-SALES PARTS. The widget holds Roam\'s parts catalogue for Q3 to Q4 2025, with part numbers, part prices, repair prices and totals, all VAT inclusive. It handles part searches, baskets and draft quotes itself, so you will rarely need to. If you do discuss parts: never invent a part, a part number or a price; never claim something is in stock, since the catalogue is a price list and not an inventory; never confirm that a part fits a particular Roam Air version, say the service team will confirm fitment; never invent delivery fees, timelines or courier details; and always call a total a draft estimate subject to Roam confirming current price, availability and compatibility. Service charges: Simple Assessment free, In-Depth Troubleshooting KES 300, Battery Assessment KES 1,000, Accident Assessment KES 1,000.',
+    'PRICE DATE. The parts catalogue is dated Q3 to Q4 2025. Do not call those prices current. Say the catalogue lists the part at that price including VAT, and recommend confirming the current price with Roam before ordering.',
+    '',
+    'RIDER CARE AND BEST PRACTICE (Roam Rider Best Practice Guide, August 2026):',
+    '• More range: steady moderate speed, smooth acceleration, lighter load, Eco mode, use regenerative braking, avoid bulky add-ons that catch the wind.',
+    '• Riding modes: Eco for efficiency, Standard for everyday, Power for heavy loads and steep hills but it uses more battery.',
+    '• Regenerative braking: light braking engages it, mechanical brakes take over when braking harder. It does not operate at 100 percent charge and resumes below 90 percent.',
+    '• Charging care: approved portable charger from a standard socket, safe to leave charging overnight, never charge near water, keep the connector clean and dry, do not cover the charger, confirm it is actually charging before leaving it.',
+    '• Maintenance: tyre pressure 28 PSI front and 32 PSI rear, check chain slack every 500 km at about 20 mm of movement, lubricate the chain after every wash, check for loose bolts, visit a Roam service location for brake adjustment.',
+    '• Washing: remove the battery first, keep water off throttle controls and battery connectors, no high-pressure washer, check for loose bolts afterwards, lubricate the chain.',
+    '• Safety: helmet with the chin strap fastened, gloves, closed shoes, jacket, bright or reflective clothing, daytime running lights, check tyres brakes and lights before every ride, both hands on the bars, no phone, never ride impaired, slow down in rain dust or wind.',
+    '• Dashboard: motor fault means do not keep riding; throttle fault means stop safely and get service help; the spanner means a powertrain maintenance issue. Battery bar, charge indicator, power meter, beam and turn indicators are status only.',
+    '• Roam Hub battery rental is KES 20 an hour, maximum 48 hours, return it so other riders can use it.',
+    '• Service centre: Roam Nairobi Ride-In Ride-Out Service Centre on Lusaka Road. Support hours 8:30am to 5:00pm.',
+    'SAFETY-FIRST ESCALATION: any fault involving brakes, throttle, motor, battery, overheating or electrical systems means tell them to stop safely and contact Roam. Never improvise a troubleshooting procedure.',
+    '',
+    'NOT YET APPROVED, so never answer these from your own knowledge. Say the team will confirm the exact figure, and offer WhatsApp, phone or a call back: exact battery capacity in kWh, units of electricity per full charge, charger AC input rating, number of charging cycles, battery degradation behaviour, what happens after 100,000 km, replacement battery price, routine servicing price, service intervals, detailed warranty terms and exclusions, financing eligibility requirements, early settlement, additional fees, exact insurance and health cover included by each financier, exact Canopy and Explorer feature lists, theft-alert specifics, offline and SMS behaviour, and data privacy terms.',
     '',
     'RULES ON NEVER DEAD-ENDING (IMPORTANT): You must never end a reply with only "I do not know" or "I do not have that information." That is useless to someone trying to buy. Whenever you cannot answer fully:',
     '1. Say briefly that you want to get it exactly right rather than guess.',
@@ -420,6 +446,184 @@
      Used when the question is understood but the knowledge base holds no
      verified answer. Never answered from general knowledge or inference.
      ========================================================================== */
+  /* ==========================================================================
+     AFTER-SALES: PARTS CATALOGUE
+     Roam After-Sales Parts and Services Catalogue, period Q3 to Q4 2025.
+     Prices include VAT. p = part, r = repair/labour, t = total.
+     This is a price reference, NOT an inventory system and NOT a
+     compatibility guide. Never claim stock, fitment or delivery from it.
+     ========================================================================== */
+  var PARTS_PERIOD = 'Q3 to Q4 2025';
+
+  var PARTS = [
+    {n:'10000003.A1',d:'10A Blade Fuse',p:11.6,r:100,t:111.6},
+    {n:'10000091.A1',d:'Axle Adjustment Bracket Assembly LH',p:116,r:200,t:316},
+    {n:'10000092.A1',d:'Axle Adjustment Bracket Assembly RH',p:104.4,r:200,t:304.4},
+    {n:'10000093.A1',d:'Axle Rear Wheel',p:359.6,r:200,t:559.6},
+    {n:'10000096.A1',d:'Ball Bearing (6301)',p:580,r:300,t:880},
+    {n:'10000097.A1',d:'Ball Bearing (close to coupling)',p:348,r:300,t:648},
+    {n:'10000100.B1',d:'Battery Charger (SuperPack 6 Amp WT480W - FPC V1.0.2)',p:5800,r:0,t:5800},
+    {n:'10000100.D1',d:'Battery Charger (SuperPack 10 Amp WT750W - FPC V1.0.4)',p:12180,r:0,t:12180},
+    {n:'10001403.C1',d:'Battery Charger Assembly (SuperPack - FPC V1.2.2)',p:12180,r:0,t:12180},
+    {n:'10000114.C1',d:'Battery Harness Assembly (Multicore)',p:5220,r:200,t:5420},
+    {n:'10000119.A1',d:'Bearing Cone',p:580,r:200,t:780},
+    {n:'10000131.A1',d:'Brake Pedal Assembly',p:1508,r:100,t:1608},
+    {n:'10000132.A1',d:'Brake Pedal Return Spring',p:116,r:100,t:216},
+    {n:'10000170.A1',d:'Cage Bearing',p:139.2,r:200,t:339.2},
+    {n:'10000177.B1',d:'Centre Stand Assembly (Custom)',p:1508,r:100,t:1608},
+    {n:'10000178.A1',d:'Centre Stand Axle',p:185.6,r:100,t:285.6},
+    {n:'10000179.A1',d:'Centre Stand Rubber Damper',p:58,r:100,t:158},
+    {n:'10000180.A1',d:'Centre Stand Spring (TVS Spec)',p:174,r:100,t:274},
+    {n:'10000187.A1',d:'Collar Coupling Side',p:174,r:100,t:274},
+    {n:'10000204.A1',d:'Contactor Assembly',p:6032,r:300,t:6332},
+    {n:'10001566.A1',d:'Contactor (72V,100Amp)',p:6032,r:300,t:6332},
+    {n:'10002004.A1',d:'Control Handle Left Hand - Grip and Switch Kit',p:1276,r:200,t:1476},
+    {n:'10000211.A1',d:'Controller Antitheft Harness',p:348,r:0,t:348},
+    {n:'10000487.C1',d:'Rear Wheel Coupling Assembly V3.0',p:1740,r:300,t:2040},
+    {n:'10000238.A1',d:'DC-DC Converter Assembly',p:928,r:300,t:1228},
+    {n:'10000250.D1',d:'DKD Display Mount (Rev D)',p:696,r:200,t:896},
+    {n:'10000252.B1',d:'DKD Display Screen Module V2',p:6380,r:100,t:6480},
+    {n:'10001997.A1',d:'Headlight and Fairing Mounting Bracket Kit.',p:6380,r:200,t:6580},
+    {n:'10000253.A1',d:'Dust Cover Rear',p:23.2,r:200,t:223.2},
+    {n:'10000259.C1',d:'Electric Motor Assembly V2 with 19MM shaft',p:37120,r:5000,t:42120},
+    {n:'10000272.B1',d:'Fairing and Windshield Assy V2',p:928,r:100,t:1028},
+    {n:'10000281.B1',d:'Flasher Relay V2',p:278.4,r:100,t:378.4},
+    {n:'10000293.A1',d:'FootPeg Bracket Assembly',p:696,r:100,t:796},
+    {n:'10000294.A1',d:'FootPeg Rubber Main Step Pad',p:116,r:100,t:216},
+    {n:'10000296.B1',d:'Front Brake Cable Assy',p:348,r:100,t:448},
+    {n:'10000300.A3',d:'Front Brake Switch Assembly Rework',p:232,r:100,t:332},
+    {n:'10000304.A1',d:'Front Fork Bellow',p:290,r:200,t:490},
+    {n:'10000334.A1',d:'Headlight Bracket',p:3480,r:200,t:3680},
+    {n:'10000308.B1',d:'Front Hub Shoe Plate Assembly V2.0',p:1392,r:100,t:1492},
+    {n:'10000309.C1',d:'Front Indicators V3',p:406,r:100,t:506},
+    {n:'10000313.B1',d:'Front Wheel Axle Kit',p:348,r:200,t:548},
+    {n:'10000314.B1',d:'Front Wheel Metallic Spacer',p:208.8,r:200,t:408.8},
+    {n:'10000327.B1',d:'Handle Bar Black V1.1 (Custom)',p:928,r:200,t:1128},
+    {n:'10000329.A1',d:'Handle Bar Clamp Kit',p:580,r:100,t:680},
+    {n:'10000333.A1',d:'Headlight Assembly',p:8340.4,r:100,t:8440.4},
+    {n:'10000380.C1',d:'Horn V3',p:464,r:100,t:564},
+    {n:'10000386.A3',d:'Ignition Switch Assembly Rework',p:928,r:200,t:1128},
+    {n:'10000408.A1',d:'Left Hand Holder Mirror Mount',p:174,r:100,t:274},
+    {n:'10000412.A1',d:'Lower Front Fender Assembly',p:2088,r:100,t:2188},
+    {n:'10000418.D1',d:'Main Harness V4.0',p:5800,r:300,t:6100},
+    {n:'10000419.B1',d:'Main Roam Air Frame Assy V1.2 (Abuja)',p:34800,r:5000,t:39800},
+    {n:'10000423.A1',d:'Motor Cable Sensor',p:928,r:100,t:1028},
+    {n:'10000425.A1',d:'Motor Mount Bracket LH',p:580,r:200,t:780},
+    {n:'10000426.A1',d:'Motor Mount Bracket RH',p:580,r:200,t:780},
+    {n:'10000430.A1',d:'Nut brake adjuster (30191036)',p:58,r:100,t:158},
+    {n:'10000454.A1',d:'Pin (30191038)',p:23.2,r:100,t:123.2},
+    {n:'10000468.A1',d:'Push Clip',p:29,r:100,t:129},
+    {n:'10000472.B1',d:'Rear Axle Sleeve Kit',p:580,r:300,t:880},
+    {n:'10000473.B1',d:'Rear Brake Panel Assembly V2.0',p:1508,r:200,t:1708},
+    {n:'10000478.B1',d:'Rear Foot Brake Switch w/o Spring',p:174,r:200,t:374},
+    {n:'10001968.A1',d:'Rear Foot Brake Switch Spring (Cozy Frame)',p:174,r:200,t:374},
+    {n:'10000481.A1',d:'Rear Rim (Custom)',p:4454.4,r:200,t:4654.4},
+    {n:'10000486.A1',d:'Rear Wheel Collar',p:406,r:200,t:606},
+    {n:'10000488.A1',d:'Rear Wheel Coupling Rubber',p:348,r:200,t:548},
+    {n:'10000491.A1',d:'Relay, 12V, 40A, 4 Term',p:232,r:100,t:332},
+    {n:'10000496.B1',d:'Right Hand Mirror Holder Assembly',p:406,r:100,t:506},
+    {n:'10001004.A1',d:'Seat Assembly (Custom)',p:4176,r:100,t:4276},
+    {n:'10000500.B1',d:'Side Mirrors Set V2',p:580,r:100,t:680},
+    {n:'10000503.B1',d:'Side Stand Spring',p:174,r:100,t:274},
+    {n:'10000529.A1',d:'Swing Arm Assembly',p:4060,r:600,t:4660},
+    {n:'10000534.B1',d:'Tail Light',p:464,r:200,t:664},
+    {n:'10000566.C1',d:'Throttle Switch Assembly V2',p:928,r:100,t:1028},
+    {n:'10000577.A1',d:'Upper Front Fender Assembly',p:1276,r:100,t:1376},
+    {n:'10000596.A1',d:'Bearing Sprocket Side (6202)',p:464,r:300,t:764},
+    {n:'10000598.A1',d:'Bearing Brake Side (6302)',p:638,r:300,t:938},
+    {n:'10000617.A1',d:'Shoe Brake',p:580,r:200,t:780},
+    {n:'10000727.A1',d:'Rear Shock Absorber Assy (Custom)',p:1183.2,r:200,t:1383.2},
+    {n:'10000748.A1',d:'Spare part only Swingarm Bush',p:348,r:600,t:948},
+    {n:'10000870.A1',d:'USB Charge Port (12V E2 - Round)',p:348,r:100,t:448},
+    {n:'10000951.A1',d:'Pre-charge Circuit Assembly',p:290,r:200,t:490},
+    {n:'10001005.C2',d:'Electronics Box Enclosure KIT V1.4 (Fibre-Reinforced Plastic)',p:1740,r:100,t:1840},
+    {n:'10001023.A1',d:'Front Rim (Custom)',p:4060,r:300,t:4360},
+    {n:'10001025.B1',d:'Riders Footrest LH & Side Stand Assembly (Custom)',p:1972,r:100,t:2072},
+    {n:'10001028.A1',d:'Safety Bar',p:2320,r:100,t:2420},
+    {n:'10001039.C1',d:'Passenger Footrest LH',p:3480,r:100,t:3580},
+    {n:'10001040.C1',d:'Passenger Footrest RH',p:3480,r:100,t:3580},
+    {n:'10001060.C1',d:'Rear Carrier V3.1 (Custom)',p:4060,r:200,t:4260},
+    {n:'10001138.B1',d:'Front Tyre Off Road Tread V2 (Tubeless)',p:4060,r:100,t:4160},
+    {n:'10001140.A1',d:'Tubeless Rim Valve',p:116,r:300,t:416},
+    {n:'10001154.A1',d:'Chain & Sprocket Service Kit',p:1809.6,r:100,t:1909.6},
+    {n:'10001269.A2',d:'Lock (Evergood E12)',p:812,r:100,t:912},
+    {n:'10001285.A1',d:'Chain Guard - Front',p:464,r:100,t:564},
+    {n:'10001286.A1',d:'Chain Guard - Rear',p:580,r:100,t:680},
+    {n:'10001288.A1',d:'Rear Fender & Mudflap Assembly',p:2436,r:100,t:2536},
+    {n:'10001394.A1',d:'GPS - Mounting Bracket Assembly (Roam)',p:11600,r:200,t:11800},
+    {n:'10001411.A1',d:'Branded Space Tank Assembly (Roam)',p:9280,r:100,t:9380},
+    {n:'10001456.A1',d:'Electric Motor Controller + CONFIG',p:20880,r:300,t:21180},
+    {n:'10001503.A1',d:'Battery SOC Display Screen',p:1508,r:1200,t:2708},
+    {n:'10001568.A1',d:'Timer Relay 4 pin 12V 40A',p:928,r:100,t:1028},
+    {n:'10001581.B1',d:'Headlight Mounting Bracket V3.0 (Custom)',p:2320,r:200,t:2520},
+    {n:'10001583.A1',d:'Front Fork Struts Set (Custom)',p:11600,r:200,t:11800},
+    {n:'10001584.A1',d:'Lower Triple Clamp V1.0',p:928,r:200,t:1128},
+    {n:'10001076.A1',d:'Battery Compartment (Single Door: No Lock & Latch)',p:4060,r:200,t:4260},
+    {n:'10001632.A1',d:'Battery DC Male Header Connector Assembly',p:4640,r:1200,t:5840},
+    {n:'10001641.A1',d:'Battery BMS CAN/Rs485/UART',p:13340,r:1200,t:14540},
+    {n:'10001643.A1',d:'Battery Screen to BMS Connector Cables',p:116,r:1200,t:1316},
+    {n:'10001691.A1',d:'Torque Rod OTS (BJJ)',p:580,r:100,t:680},
+    {n:'10001692.A1',d:'Rear Brake Adjustment Bracket',p:290,r:100,t:390},
+    {n:'10001921.A1',d:'Roam Air Vinyl kit',p:249.4,r:100,t:349.4},
+    {n:'10001922.A1',d:'Handle Washer and Damper Kit',p:348,r:100,t:448},
+    {n:'10001932.A1',d:'Fairing and Windshield Service Kit',p:580,r:100,t:680},
+    {n:'',d:'Shaft Replacement',p:11600,r:1800,t:13400}
+  ];
+  var SERVICES = [
+    { d:'Simple Assessment',       t:0    },
+    { d:'In-Depth Troubleshooting',t:300  },
+    { d:'Battery Assessment',      t:1000 },
+    { d:'Accident Assessment',     t:1000 }
+  ];
+
+  /* Everyday words riders use, mapped to catalogue wording. Lets someone say
+     "my front light is broken" or "shock imeharibika" and still find the part. */
+  var PART_ALIASES = [
+    { w:/head ?light|front light|head lamp|taa ya mbele/, t:'headlight' },
+    { w:/tail ?light|rear light|brake light/,             t:'tail light' },
+    { w:/indicator|blinker|turn signal/,                  t:'indicator' },
+    { w:/\bhorn\b|hooter/,                                t:'horn' },
+    { w:/\bmirror/,                                       t:'mirror' },
+    { w:/shock|suspension|rear shock/,                    t:'shock absorber' },
+    { w:/\bfork\b/,                                      t:'fork' },
+    { w:/brake pedal/,                                    t:'brake pedal' },
+    { w:/brake cable/,                                    t:'brake cable' },
+    { w:/brake shoe|shoe brake/,                          t:'shoe brake' },
+    { w:/\bbrakes?\b/,                                    t:'brake' },
+    { w:/\bchain\b/,                                      t:'chain' },
+    { w:/sprocket/,                                       t:'sprocket' },
+    { w:/\btyre|tire\b/,                                  t:'tyre' },
+    { w:/\brim\b|wheel rim/,                              t:'rim' },
+    { w:/\bseat\b/,                                       t:'seat' },
+    { w:/\bcharger\b|charging brick/,                     t:'battery charger' },
+    { w:/\bdisplay\b|screen|dashboard|speedo/,            t:'display' },
+    { w:/\bmotor\b/,                                      t:'electric motor' },
+    { w:/controller/,                                     t:'controller' },
+    { w:/\bfuse\b/,                                       t:'fuse' },
+    { w:/\bgps\b|tracker/,                                t:'gps' },
+    { w:/\bharness\b|wiring/,                             t:'harness' },
+    { w:/\bstand\b|kickstand/,                            t:'stand' },
+    { w:/carrier|rack/,                                   t:'carrier' },
+    { w:/\bfender\b|mudguard|mudflap/,                    t:'fender' },
+    { w:/foot ?peg|footrest/,                             t:'footrest' },
+    { w:/\block\b/,                                       t:'lock' },
+    { w:/usb|phone charg/,                                t:'usb' },
+    { w:/\bframe\b/,                                      t:'frame' },
+    { w:/swing ?arm/,                                     t:'swing arm' },
+    { w:/handle ?bar|handlebar/,                          t:'handle bar' },
+    { w:/throttle/,                                       t:'throttle' },
+    { w:/ignition|key switch/,                            t:'ignition' },
+    { w:/space tank|storage/,                             t:'space tank' },
+    { w:/windshield|fairing|wind screen/,                 t:'fairing' },
+    { w:/\bbms\b/,                                        t:'bms' },
+    { w:/\bbearing\b/,                                    t:'bearing' },
+    { w:/vinyl|sticker|decal/,                            t:'vinyl' },
+    { w:/safety bar|crash bar/,                           t:'safety bar' }
+  ];
+
+  /* Swahili and Sheng words that mean something is broken. */
+  var BROKEN = /imeharibika|imevunjika|haifanyi|broken|damaged|faulty|cracked|not working|imepotea|nimepoteza|imeisha|worn out|need(s)? (a )?new|replac(e|ing|ement)|imechoka|inahitaji/;
+
   var FALLBACK = {
     location:
       "I don't have confirmed Roam availability for {x} in my current information.\n" +
@@ -487,13 +691,14 @@
       '• Every Roam Air comes with a portable charger\n' +
       '• It plugs into a standard wall outlet\n' +
       '• The battery lifts out so you can carry it indoors\n' +
-      '• About 3 hours for a full battery\n' +
+      '• About 3 to 4 hours for a full battery\n' +
       'Want to know what that costs?' },
 
     { c:'charging_time', a:
       'Charging times for the Roam Air Gen 3:\n' +
-      '• At home from a standard outlet: about 3 hours for a full battery\n' +
-      '• At a Roam Point the battery adds over 1 km of range per minute\n' +
+      '• At home from a standard outlet: about 3 to 4 hours for a full battery\n' +
+      '• Fast charging adds over 1 km of range per minute\n' +
+      '• 20 to 80 percent in under 45 minutes at a Roam Point or Roam Hub\n' +
       'Want to know what charging costs?' },
 
     { c:'charging_where', a:
@@ -695,6 +900,72 @@
       '• 1,600 km from Nairobi to Addis Ababa\n' +
       'Want to try one yourself?' },
 
+    { c:'care_range', a:
+      'Getting more range out of a charge comes down to how you ride.\n' +
+      '• Hold a steady, moderate speed, high speed uses the most energy\n' +
+      '• Accelerate smoothly rather than hard off the line\n' +
+      '• Carry only the load you need\n' +
+      '• Use Eco mode for efficiency, Power only for heavy loads or steep hills\n' +
+      '• Use regenerative braking, and skip bulky add-ons that catch the wind\n' +
+      'Want the charging cost worked out for your daily distance?' },
+
+    { c:'regen', a:
+      'Regenerative braking turns some of your speed back into charge.\n' +
+      '• Brake lightly to engage it, the mechanical brakes take over when you brake harder\n' +
+      '• Coasting without accelerating also recovers energy\n' +
+      '• It does not work at 100 percent charge, and resumes below 90 percent\n' +
+      'If braking ever feels wrong, stop safely and call ' + PHONE + '.' },
+
+    { c:'battery_care', a:
+      'Looking after the battery keeps your range and your resale value.\n' +
+      '• Charge from a standard socket with the approved portable charger\n' +
+      '• It is safe to leave it charging overnight with the approved charger\n' +
+      '• Never charge near water or puddles, keep the connector clean and dry\n' +
+      '• Do not cover the charger while it is plugged in, it needs to stay cool\n' +
+      '• Check it is actually charging before you leave it\n' +
+      'Anything else about charging?' },
+
+    { c:'washing', a:
+      'Washing a Roam Air is easy, just a few rules.\n' +
+      '• Take the battery out first\n' +
+      '• Keep water off the throttle controls and the battery connectors\n' +
+      '• No high-pressure washer, it damages paint and electrics\n' +
+      '• Check for loose bolts afterwards\n' +
+      '• Lubricate the chain after every wash' },
+
+    { c:'maintenance_tips', a:
+      'Your regular checks on a Roam Air:\n' +
+      '• Tyre pressure: 28 PSI front, 32 PSI rear\n' +
+      '• Chain: check slack every 500 km, about 20 mm of movement\n' +
+      '• Lubricate the chain after every wash\n' +
+      '• Check for loose bolts or missing parts regularly\n' +
+      '• If the spanner light shows, check brakes, chain, battery connector and tyres\n' +
+      'If the warning stays on, call ' + PHONE + '.' },
+
+    { c:'safety', a:
+      'Riding safely on a Roam Air:\n' +
+      '• Helmet on with the chin strap fastened, plus gloves, closed shoes and a jacket\n' +
+      '• Bright or reflective clothing, daytime running lights on\n' +
+      '• Check tyres, brakes and lights before every ride\n' +
+      '• Both hands on the bars, no phone while riding, never ride impaired\n' +
+      '• In rain, dust or wind slow down and leave more following distance\n' +
+      'Carry your emergency contact and blood type with you.' },
+
+    { c:'dashboard', a:
+      'What the dashboard is telling you:\n' +
+      '• Motor fault: do not keep riding until it is sorted\n' +
+      '• Throttle fault: stop safely and get service help\n' +
+      '• Spanner: a powertrain maintenance issue needs checking\n' +
+      '• Battery bar, charge, power meter, beam and indicators are status only\n' +
+      'For anything to do with brakes, motor, throttle, battery or overheating, stop safely and call ' + PHONE + '.' },
+
+    { c:'hub_rental', a:
+      'Roam Hubs do fast charging, battery rentals, maintenance and rider support.\n' +
+      '• Battery rental is KES 20 an hour\n' +
+      '• Return rental batteries when you finish so other riders can use them\n' +
+      '• Maximum rental period is 48 hours\n' +
+      'Call ' + PHONE + ' for the Hub nearest you.' },
+
     { c:'general_roam', a:
       'Roam designs and builds electric vehicles for Africa, in Africa.\n' +
       '• Based in Nairobi, Kenya\n' +
@@ -726,6 +997,7 @@
     { c:'country',       m:/outside kenya|other countr|which countr|abroad|export|international|another country/ },
 
     // Range before charging, so "distance on a full charge" is a range question
+    { c:'care_range',    m:/(more|better|increase|improve|maximi[sz]e|extend|save|conserve)[\s\S]{0,20}(range|batter)|range[\s\S]{0,20}(tips?|better|improve|last longer)|ride (farther|further)|use less (power|energy|battery)|efficient riding|eco mode|riding modes?|batter[\s\S]{0,20}drain/ },
     { c:'range',         m:/\brange\b|how far|distance on|kilometres? on|km on (one|a|two|full)|one charge\b|mileage|reach how far|how many (km|kilometres|kilometers)|\bdistance\b/ },
 
     { c:'charging_cost', m:/(charg\w*|electricit\w*|power|unit|kwh)[\s\S]{0,30}(cost|much|price|expensive|spend|tariff|bill|rate)|(cost|much|price|expensive|spend|pay)[\s\S]{0,30}(charg\w*|electricit\w*|kwh)|\bkwh\b|(fill|filling|top up)[\s\S]{0,20}batter/ },
@@ -746,6 +1018,13 @@
     { c:'performance',   m:/how fast|top speed|acceleration|\btorque\b|\bmotor\b|horsepower|\bpower\b|climb|hill|riding mode|\bspecs?\b|specification/ },
     { c:'payload',       m:/payload|carry|\bload\b|luggage|cargo|goods|passenger|pillion|\bboda\b|delivery box|how much weight/ },
     { c:'durability',    m:/\brain\b|raining|rainy|\bwet\b|\bwater\b|waterproof|bad weather|wet weather|flood|\bdust\b|\bmud\b|durab|tough|rough road|bad road|pothole|vibration|submerg/ },
+    { c:'regen',         m:/regen|regenerative|\bebs\b|engine brak|energy recovery/ },
+    { c:'battery_care',  m:/(care|look after|take care|protect|maintain|prolong|damage|safe)[\s\S]{0,25}batter|batter[\s\S]{0,25}(care|look after|protect|prolong|healthy|damage)|overnight charg|charg[\s\S]{0,20}overnight|leave it charging|safe to charge/ },
+    { c:'washing',       m:/wash|clean(ing)?\b|jet ?wash|pressure wash|karcha|osha/ },
+    { c:'dashboard',     m:/dashboard|warning light|spanner|indicator light|what does the.{0,20}light|error light|motor fault|throttle fault|display shows/ },
+    { c:'safety',        m:/safety|\bhelmet\b|protective|ride safe|safe riding|reflective|\bgear\b(?!box)|accident/ },
+    { c:'hub_rental',    m:/(rent|rental|hire|borrow)[\s\S]{0,20}batter|batter[\s\S]{0,20}(rent|rental|hire)|hub rental|48 hours/ },
+    { c:'maintenance_tips', m:/tyre pressure|tire pressure|\bpsi\b|chain (slack|tension|lubric|adjust)|lubricat|how (do i|to) (look after|maintain|care for)|care tips?|best practice|maintenance tips?|check(list)?\b/ },
     { c:'service',       m:/servic(e|ing)|maintain|maintenance|repair|spare part|breakdown|mechanic|garage|oil change|spark plug|tune.?up/ },
     { c:'warranty',      m:/warrant|guarantee/ },
     { c:'legal',         m:/licen[cs]e|registration|logbook|number plate|ntsa|road.?legal|insur/ },
@@ -1128,6 +1407,16 @@
       '<a class="rai-action primary" href="' + testRideLink() + '" target="_blank" rel="noopener">' +
         '<svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 5.9 2 10.7c0 2.7 1.4 5.1 3.6 6.7v3.3c0 .4.5.7.9.4l3.1-2.1c.8.2 1.6.2 2.4.2 5.5 0 10-3.9 10-8.5S17.5 2 12 2z"/></svg>' +
         'Book your free test ride</a>' +
+    '</div>';
+  }
+
+  /* Offered whenever the answer involves money, so the rider can go straight
+     to the full breakdown instead of asking follow-up after follow-up. */
+  function calculatorAction(label) {
+    return '<div class="rai-actions">' +
+      '<a class="rai-action primary" href="' + CALCULATOR_URL + '" target="_blank" rel="noopener">' +
+        '<svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 4v3h10V6H7zm0 5v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v2h2v-2h-2zm-8 4v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v4h2v-4h-2zm-8 4v2h2v-2H7zm4 0v2h2v-2h-2z"/></svg>' +
+        (label || 'Open the cost calculator') + '</a>' +
     '</div>';
   }
 
@@ -1519,6 +1808,289 @@
              unresolved: true, forced: true, cat: 'locations' };
   }
 
+  /* ==========================================================================
+     AFTER-SALES ENGINE
+     Part search by number, description, everyday wording, Swahili and Sheng.
+     Basket, quantities and a draft quote. Every figure comes from the
+     catalogue. Nothing here invents a part, a price, stock, fitment,
+     delivery or an appointment.
+     ========================================================================== */
+
+  var basket = [];   // [{ n, d, p, r, t, q }]
+
+  function ksh(v) {
+    var s = (Math.round(v * 100) / 100).toFixed(2).replace(/\.00$/, '');
+    return 'KES ' + s.replace(/\B(?=(\d{3})+(?!\d)(\.|$))/g, ',');
+  }
+
+  /* Words that carry no meaning when matching a part description. */
+  var PSTOP = { the:1, a:1, an:1, my:1, for:1, of:1, and:1, is:1, it:1, to:1, on:1,
+                how:1, much:1, price:1, cost:1, need:1, want:1, add:1, buy:1, get:1,
+                roam:1, air:1, bike:1, motorcycle:1, part:1, parts:1, new:1, one:1,
+                please:1, what:1, does:1, do:1, i:1, me:1, you:1, your:1, can:1,
+                broken:1, damaged:1, replace:1, replacement:1, spare:1, quote:1,
+                bike:1, bikes:1, motorcycle:1, motorcycles:1, electric:1, batteries:1,
+                two:1, three:1, four:1, five:1, another:1, more:1, special:1, some:1 };
+
+  function partTokens(q) {
+    return q.replace(/[^a-z0-9.\s]/g, ' ').split(/\s+/)
+            .filter(function (w) {
+              return w.length > 2 && !PSTOP[w] && !/^[0-9.]+$/.test(w);
+            });
+  }
+
+  /* Returns matching catalogue rows, best first. */
+  function findParts(q) {
+    var i, hits = [];
+
+    // 1. Exact part number wins outright.
+    var pn = q.match(/\b(\d{8})\s*\.?\s*([a-z]\d)\b/i);
+    if (pn) {
+      var want = (pn[1] + '.' + pn[2]).toUpperCase();
+      for (i = 0; i < PARTS.length; i++) if (PARTS[i].n === want) return [PARTS[i]];
+    }
+
+    // 2. Everyday wording mapped to catalogue wording.
+    var terms = [];
+    for (i = 0; i < PART_ALIASES.length; i++) {
+      if (PART_ALIASES[i].w.test(q)) terms.push(PART_ALIASES[i].t);
+    }
+    var words = partTokens(q).concat(terms.join(' ').split(' ').filter(Boolean));
+    if (!words.length) return [];
+    // A single loose word is not enough. Without a recognised part word, the
+    // query must line up with at least two words of a description, otherwise
+    // "the electric bike" finds a motor controller.
+    var minHits = terms.length ? 1 : 2;
+
+    PARTS.forEach(function (p) {
+      var d = p.d.toLowerCase(), score = 0, hit = 0;
+      words.forEach(function (w) {
+        var stem = w.length > 5 ? w.slice(0, 5) : w;
+        if (d.indexOf(stem) !== -1) { score += stem.length; hit++; }
+      });
+      if (hit) hits.push({ p: p, s: score, h: hit });
+    });
+    if (!hits.length) return [];
+
+    var maxHit = Math.max.apply(null, hits.map(function (x) { return x.h; }));
+    if (maxHit < minHits) return [];
+    hits = hits.filter(function (x) { return x.h === maxHit; });
+    hits.sort(function (a, b) { return b.s - a.s || a.p.d.length - b.p.d.length; });
+    return hits.map(function (x) { return x.p; });
+  }
+
+  var SERVICE_WORDS = [
+    { w:/in.?depth|troubleshoot|diagnos/, d:'In-Depth Troubleshooting' },
+    { w:/batter[a-z]*\s*assess/,          d:'Battery Assessment' },
+    { w:/accident/,                       d:'Accident Assessment' },
+    { w:/simple\s*assess|basic\s*assess/, d:'Simple Assessment' }
+  ];
+
+  function serviceMatch(q) {
+    for (var i = 0; i < SERVICE_WORDS.length; i++) {
+      if (SERVICE_WORDS[i].w.test(q)) {
+        for (var j = 0; j < SERVICES.length; j++) {
+          if (SERVICES[j].d === SERVICE_WORDS[i].d) return SERVICES[j];
+        }
+      }
+    }
+    return null;
+  }
+
+  function partLine(p) {
+    var s = '**' + p.d + '**\n' +
+            '• Part number: ' + p.n + '\n' +
+            '• Part: ' + ksh(p.p) + '\n';
+    if (p.r > 0) s += '• Repair or fitting: ' + ksh(p.r) + '\n' +
+                      '• Total: ' + ksh(p.t) + '\n';
+    return s;
+  }
+
+  var PRICE_CAVEAT = 'Listed in the Roam parts catalogue for ' + PARTS_PERIOD +
+                     ', VAT included. Confirm the current price and availability with Roam on ' + PHONE + '.';
+
+  /* How many of something the customer asked for. */
+  var WORDNUM = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8,
+                  nine:9, ten:10, a:1, an:1, moja:1, mbili:2, tatu:3, nne:4, tano:5 };
+
+  function qtyIn(q) {
+    var m = q.match(/\b(\d{1,2})\b/);
+    if (m) { var n = parseInt(m[1], 10); if (n > 0 && n <= 50) return n; }
+    var w = q.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|moja|mbili|tatu|nne|tano)\b/);
+    return w ? WORDNUM[w[1]] : 1;
+  }
+
+  function basketTotals() {
+    var parts = 0, labour = 0;
+    basket.forEach(function (b) { parts += b.p * b.q; labour += b.r * b.q; });
+    return { parts: parts, labour: labour, total: parts + labour };
+  }
+
+  function basketView(title) {
+    if (!basket.length) {
+      return 'Your parts list is empty at the moment.\n' +
+             'Tell me a part, for example "add a brake pedal", and I will start one for you.';
+    }
+    var s = (title || 'Here is your parts list.') + '\n';
+    basket.forEach(function (b) {
+      s += '• ' + b.q + ' x ' + b.d + ' (' + b.n + '): ' + ksh(b.t * b.q) + '\n';
+    });
+    var t = basketTotals();
+    s += 'Parts ' + ksh(t.parts) + ', fitting ' + ksh(t.labour) + ', total **' + ksh(t.total) + '**\n';
+    return s + 'Say "give me a quote" when you are ready.';
+  }
+
+  function quoteView() {
+    if (!basket.length) {
+      return 'There is nothing on your list yet.\n' +
+             'Tell me which parts you need and I will put a draft estimate together.';
+    }
+    var t = basketTotals();
+    var s = '**ROAM PARTS ESTIMATE**\n';
+    basket.forEach(function (b) {
+      s += '• ' + b.q + ' x ' + b.d + ' (' + b.n + ') at ' + ksh(b.t) + ' each: ' + ksh(b.t * b.q) + '\n';
+    });
+    s += 'Parts subtotal: ' + ksh(t.parts) + '\n' +
+         'Repair and fitting: ' + ksh(t.labour) + '\n' +
+         'Estimated total: **' + ksh(t.total) + '**\n' +
+         'VAT is included. This is a draft estimate from the ' + PARTS_PERIOD + ' catalogue, not a final quote. ' +
+         'Roam will confirm the current price, availability, compatibility and fitting.\n' +
+         'Shall I take your number so the team can confirm it and place the order?';
+    return s;
+  }
+
+  function addToBasket(p, qty) {
+    for (var i = 0; i < basket.length; i++) {
+      if (basket[i].n === p.n) { basket[i].q += qty; return basket[i]; }
+    }
+    basket.push({ n: p.n, d: p.d, p: p.p, r: p.r, t: p.t, q: qty });
+    return basket[basket.length - 1];
+  }
+
+  /* Handles anything to do with parts, prices, baskets and quotes.
+     Returns an answer object, or null so the normal pipeline continues. */
+  function afterSalesAnswer(q) {
+    var i, m, found, qty;
+
+    // ---- basket management -------------------------------------------------
+    if (/^(clear|empty|start over|reset)\b|clear (the )?(basket|list|cart)|start over/.test(q)) {
+      basket = [];
+      return { text: 'Cleared. Tell me the parts you need and I will start a fresh list.',
+               unresolved: false, forced: true, cat: 'parts' };
+    }
+    if (/(show|see|view|what.{0,12}(in )?my)\s*(me\s*)?(my\s*)?(basket|list|cart|selected|parts)|what have i (added|selected)|what parts did i add|my total|what.?s my total/.test(q)) {
+      return { text: basketView(), unresolved: false, forced: true, cat: 'parts' };
+    }
+    if (/(give|get|make|prepare|send).{0,15}quote|^quote\b|quotation|how much (is|for|will) everything|total for everything|how much for everything/.test(q)) {
+      return { text: quoteView(), unresolved: false, forced: true, cat: 'parts' };
+    }
+    if (/^remove\b|remove (the|a|my)\b|take off|delete (the|a)\b/.test(q)) {
+      if (!basket.length) {
+        return { text: 'There is nothing on your list to remove yet.', unresolved: false, forced: true, cat: 'parts' };
+      }
+      found = findParts(q).filter(function (fp) {
+        for (var j = 0; j < basket.length; j++) if (basket[j].n === fp.n) return true;
+        return false;
+      });
+      if (!found.length) {
+        return { text: 'Which one should I take off?\n' + basketView(''), unresolved: false, forced: true, cat: 'parts' };
+      }
+      for (i = 0; i < basket.length; i++) {
+        if (basket[i].n === found[0].n) {
+          var name = basket[i].d;
+          basket.splice(i, 1);
+          return { text: 'Removed ' + name + '.\n' + basketView(''), unresolved: false, forced: true, cat: 'parts' };
+        }
+      }
+      return { text: found[0].d + ' is not on your list.\n' + basketView(''), unresolved: false, forced: true, cat: 'parts' };
+    }
+    // "make that three", "add two more" applies to the last item added
+    m = q.match(/^(make (it|that)|change.{0,12}to|i need)\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s*(please)?\s*[.!]?$/);
+    if (m && basket.length && !findParts(q).length) {
+      basket[basket.length - 1].q = qtyIn(m[3]);
+      return { text: basketView('Updated.'), unresolved: false, forced: true, cat: 'parts' };
+    }
+    if (/^add (another|one more)\b|one more\b/.test(q) && basket.length && !findParts(q).length) {
+      basket[basket.length - 1].q += 1;
+      return { text: basketView('Added one more.'), unresolved: false, forced: true, cat: 'parts' };
+    }
+
+    // ---- service prices ----------------------------------------------------
+    var svc = serviceMatch(q);
+    if (svc) {
+      return { unresolved: false, forced: true, cat: 'parts', text:
+        '**' + svc.d + '**: ' + (svc.t === 0 ? 'free of charge' : ksh(svc.t)) + '\n' +
+        PRICE_CAVEAT };
+    }
+    if (/service (price|prices|charges|rates)|assessment (price|cost)|what.{0,15}(services|assessments) (do you|cost)/.test(q)) {
+      var s = 'Roam after-sales service charges:\n';
+      SERVICES.forEach(function (x) { s += '• ' + x.d + ': ' + (x.t === 0 ? 'free' : ksh(x.t)) + '\n'; });
+      return { text: s + PRICE_CAVEAT, unresolved: false, forced: true, cat: 'parts' };
+    }
+
+    // A charger amperage we do not stock must be refused by name, not invented.
+    m = q.match(/\b(\d{1,3})\s*(?:a|amp|amps|ampere)\b/);
+    if (m && /charger/.test(q)) {
+      var amp = m[1];
+      if (amp !== '6' && amp !== '10') {
+        return { unresolved: false, forced: true, cat: 'parts', text:
+          "I don't see a " + amp + "A charger in my current Roam parts catalogue.\n" +
+          '• Battery Charger, SuperPack 6 Amp (10000100.B1): ' + ksh(5800) + '\n' +
+          '• Battery Charger, SuperPack 10 Amp (10000100.D1): ' + ksh(12180) + '\n' +
+          PRICE_CAVEAT };
+      }
+    }
+
+    // ---- is this a parts question at all? ---------------------------------
+    var asking     = /^(do|does|did|is|are|was|can|could|should|would|will|what|how|why|where|which|who)\b/.test(q) || /\?\s*$/.test(q);
+    var wantsAdd   = /^add\b|\badd (a|an|the|another|my|two|three|four|five|six|seven|eight|nine|ten|\d)|put .{0,20}(in|on) (my )?(basket|list|cart)/.test(q) ||
+                     (!asking && /\bi (need|want) (a|an|the|two|three|four|five|six|seven|eight|nine|ten|\d+) [a-z]{3}/.test(q));
+    var wantsPrice = /how much|price|cost|bei|ngapi|what does .{0,20}cost/.test(q);
+    var partsish   = /\bpart\b|\bparts\b|spare|part number|\d{8}\s*\.?\s*[a-z]\d/i.test(q);
+    var broken     = BROKEN.test(q);
+    /* Asking what charging COSTS is an energy question, not a request to buy
+       a charger. Without this the word "charging" finds Battery Charger. */
+    if (/charging cost|cost[\s\S]{0,15}(to )?charg|charg[\s\S]{0,15}cost|electricit|\bkwh\b|tariff|per kilometre|per km|spend[\s\S]{0,15}charg|charg[\s\S]{0,15}how much|how much[\s\S]{0,15}(to )?charg|(fill|filling|top up)[\s\S]{0,20}batter/.test(q) && !/\bcharger\b|chargers/.test(q)) return null;
+    /* Rider-care wording is not a parts enquiry, even when it shares a word
+       with a part name ("safety gear" is not the Safety Bar). */
+    if (/safety gear|safe riding|ride safe|what.{0,15}(gear|equipment).{0,15}(need|wear)|helmet|protective|best practice|care tips?|look after|maintain my|tyre pressure|chain slack|wash/.test(q)) return null;
+    if (!(wantsAdd || wantsPrice || partsish || broken)) return null;
+
+    found = findParts(q);
+    if (!found.length) {
+      if (partsish && /\d{8}/.test(q)) {
+        return { unresolved: true, forced: true, cat: 'parts', text:
+          "I don't see that part number in my current Roam parts catalogue.\n" +
+          'Please check the number, or call Roam on ' + PHONE + ' and the team will find it for you.' };
+      }
+      return null;   // let the normal pipeline try, it may be a product question
+    }
+
+    // Several plausible parts. Ask rather than pick for them, unless they
+    // gave a clear instruction to add, in which case take the closest match.
+    if (found.length > 1 && found.length <= 6 && !/\d{8}/.test(q) && !wantsAdd) {
+      var list = 'I found a few parts that could be the one.\n';
+      found.slice(0, 5).forEach(function (p) {
+        list += '• **' + p.d + '** (' + p.n + '): part ' + ksh(p.p) +
+                (p.r > 0 ? ', fitted ' + ksh(p.t) : '') + '\n';
+      });
+      return { text: list + 'Which one do you need? If you are not sure, send a photo to WhatsApp on ' + PHONE + '.\n' + PRICE_CAVEAT,
+               unresolved: false, forced: true, cat: 'parts' };
+    }
+
+    var part = found[0];
+
+    if (wantsAdd) {
+      qty = qtyIn(q);
+      addToBasket(part, qty);
+      return { text: 'Added ' + qty + ' x ' + part.d + ' (' + ksh(part.t) + ' fitted each).\n' + basketView(''),
+               unresolved: false, forced: true, cat: 'parts' };
+    }
+
+    return { unresolved: false, forced: true, cat: 'parts', text:
+      partLine(part) + PRICE_CAVEAT + '\nSay "add it" and I will start a parts list for you.' };
+  }
+
   /* Do the maths for them, using only the approved KES 1 per kilometre figure.
      Never invents an electricity tariff or a petrol price. */
   function calcAnswer(q) {
@@ -1580,6 +2152,7 @@
     r = countryAnswer(q);  if (r) { lastCat = r.cat; return r; }
     r = locationAnswer(q); if (r) { lastCat = r.cat; return r; }
     r = calcAnswer(q);     if (r) { lastCat = r.cat; return r; }
+    r = afterSalesAnswer(q); if (r) { lastCat = r.cat; return r; }
 
     for (i = 0; i < NOT_APPROVED.length; i++) {
       if (NOT_APPROVED[i].m.test(q)) {
@@ -1624,6 +2197,18 @@
     return { text: FALLBACK.general, unresolved: true, forced: true, cat: cat };
   }
 
+  /* Money questions. These get the calculator button alongside the answer. */
+  var MONEY_CATS = { charging_cost:1, savings:1, financing:1, pricing:1, buy:1, b2b:1, resale:1 };
+  var CALC_LABEL = {
+    charging_cost: 'Work out your charging cost',
+    savings:       'Work out your savings',
+    financing:     'Compare financing plans',
+    pricing:       'Compare the total cost',
+    buy:           'Compare financing plans',
+    b2b:           'Open the fleet savings calculator',
+    resale:        'Compare the total cost'
+  };
+
   /* Story cards are tied to the classified category, so an answer can never be
      illustrated with a card about an unrelated subject. */
   var CARDS = {
@@ -1665,6 +2250,12 @@
       (CARDS[cat] || []).forEach(function (k) { row(mediaCard(k), 'bot'); });
       if (cat === 'financing' || cat === 'pricing' || cat === 'buy') row(financingCard(), 'bot');
       if (cat === 'test_ride') row(bookRideAction(), 'bot');
+    }
+
+    /* Anything about money gets the calculator, including the guardrailed
+       answers, because the calculator is where the real numbers live. */
+    if (MONEY_CATS[cat]) {
+      row(calculatorAction(CALC_LABEL[cat] || 'Open the cost calculator'), 'bot');
     }
     if (/faq|frequently asked|common question|^questions?$|^help$/.test(l)) row(faqCard(), 'bot');
 
