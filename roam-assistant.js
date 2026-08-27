@@ -960,8 +960,13 @@
   var BATTERY_NOT_PRICE = /\brange\b|how far|how long|last\b|lasts\b|durab|degrad|cycle|life\b|charg|swap|rent|rental|hire|borrow|weigh|heavy|\bkg\b|size|spec|volt|\bip67\b|waterproof|water|remov|warrant|guarantee|own\b|owns\b|mine\b|belong|lease|include[ds]?\b|capacit|\bkwh\b|health|replace under|where\b|wapi\b/;
   var BATTERY_WORD      = /\bbatter(y|ies)\b|\bbetri\b|\bbattery\b/;
   /* Wording that means the complete motorcycle, so "a Roam Air with two
-     batteries" stays a motorcycle price and does not become a battery one. */
-  var WHOLE_BIKE        = /\broam air\b|\bmotorcycle\b|\bmotor ?bike\b|\bpikipiki\b|\bthe bike\b|\ba bike\b|\bthe motorbike\b|\bcomplete\b|\bwhole\b/;
+     batteries" stays a motorcycle price and does not become a battery one.
+     A bare mention of "Roam Air" is NOT enough on its own: "How much is the
+     Roam Air battery?" is a component question, not a motorcycle one, and
+     must still reach the battery price below. Only a dual/combo battery
+     configuration, or wording with no battery word to disambiguate against,
+     counts as the whole bike. */
+  var WHOLE_BIKE        = /\bmotorcycle\b|\bmotor ?bike\b|\bpikipiki\b|\bthe bike\b|\ba bike\b|\bthe motorbike\b|\bcomplete\b|\bwhole\b|\btwo\b[\s\S]{0,10}\bbatter(y|ies)\b|\bdual\b[\s\S]{0,10}\bbatter(y|ies)\b|\b2\b[\s\S]{0,10}\bbatter(y|ies)\b|\broam air\b[\s\S]{0,24}\bwith\b[\s\S]{0,24}\bbatter(y|ies)\b/;
   var PRICE_ASK         = /how much|price|pricing|cost|costs|bei\b|ngapi\b|gharama|what does .{0,24}cost|charge for/;
   var BUY_ASK           = /\b(buy|buying|purchase|purchasing|order|acquire|get|need|want)\b/;
   var EXTRA_BATTERY     = /\b(spare|extra|another|second|additional|one more|new)\b/;
