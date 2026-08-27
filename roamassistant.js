@@ -1,36 +1,3 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Roam Assistant: Preview</title>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
- body{margin:0;font-family:Montserrat,system-ui,sans-serif;background:#F6F6F3;color:#14170F;}
- .w{max-width:900px;margin:0 auto;padding:56px 24px 180px;}
- .eb{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#B25110;display:flex;align-items:center;gap:10px;}
- .eb::before{content:"";width:18px;height:1px;background:#ED7D31;}
- h1{font-size:clamp(28px,6vw,38px);font-weight:800;text-transform:uppercase;letter-spacing:-.01em;margin:14px 0;}
- p{color:#5B6560;line-height:1.7;max-width:640px;}
- code{background:#EDEDE8;padding:2px 7px;border-radius:5px;font-size:13px;}
- .box{background:#fff;border:1px solid rgba(20,24,20,.1);border-radius:14px;padding:20px 22px;margin-top:20px;}
- .box h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;}
- ul{color:#5B6560;line-height:1.9;padding-left:20px;margin:0;}
-</style></head><body>
-<div class="w">
-  <div class="eb">Preview</div>
-  <h1>Roam Assistant</h1>
-  <p>This page exists only so you can try the widget. In production it is a single
-  script tag in the Webflow footer.</p>
-  <div class="box"><h3>Test the no-dead-end behaviour</h3><ul>
-    <li>&ldquo;Do you ship to Uganda?&rdquo;: something it cannot know</li>
-    <li>&ldquo;What colour options are there?&rdquo;: not in the knowledge base</li>
-    <li>Both should offer WhatsApp, Call and <em>Get me an answer</em></li>
-  </ul></div>
-  <div class="box"><h3>Mobile</h3><ul>
-    <li>Narrow the window under 600px: it becomes a full-screen sheet</li>
-    <li>Inputs are 16px so iOS does not zoom on tap</li>
-  </ul></div>
-</div>
-<script>
 /*! ============================================================================
  *  ROAM ASSISTANT  ·  roam-electric.com
  *  Self-injecting sales assistant widget with lead capture.
@@ -43,8 +10,8 @@
  *        leadsEndpoint: "https://script.google.com/macros/s/XXXX/exec",
  *        aiMode:        "guarded"   // guarded (default) | strict | off
  *      };
- *    <\/script>
- *    <script src="https://cdn.jsdelivr.net/gh/adallan01/Roam-Assistant@main/roam-assistant.js" defer><\/script>
+ *    </script>
+ *    <script src="https://cdn.jsdelivr.net/gh/adallan01/Roam-Assistant@main/roam-assistant.js" defer></script>
  *
  *  Both endpoints are optional. With no apiEndpoint the assistant answers
  *  from its built-in knowledge base. With no leadsEndpoint the lead form
@@ -4692,6 +4659,3 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
-
-</script>
-</body></html>
