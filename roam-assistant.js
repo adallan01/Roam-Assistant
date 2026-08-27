@@ -7,7 +7,8 @@
  *    <script>
  *      window.RoamAssistantConfig = {
  *        apiEndpoint:   "https://YOUR-PROXY/api/roam-assistant",
- *        leadsEndpoint: "https://script.google.com/macros/s/XXXX/exec"
+ *        leadsEndpoint: "https://script.google.com/macros/s/XXXX/exec",
+ *        aiMode:        "guarded"   // guarded (default) | strict | off
  *      };
  *    </script>
  *    <script src="https://cdn.jsdelivr.net/gh/adallan01/Roam-Assistant@main/roam-assistant.js" defer></script>
@@ -15,6 +16,13 @@
  *  Both endpoints are optional. With no apiEndpoint the assistant answers
  *  from its built-in knowledge base. With no leadsEndpoint the lead form
  *  falls back to WhatsApp so no enquiry is ever lost.
+ *
+ *  ANSWERING (aiMode). With an apiEndpoint set, the model writes the answer
+ *  for every question that is not a location lookup, a parts lookup or a live
+ *  panel action, working from the approved knowledge handed to it per question
+ *  and checked against the approved figures, places and partners before it is
+ *  rendered. Set "strict" to restrict the model to questions the built-in
+ *  knowledge already answers, or "off" for no model at all.
  *
  *  Knowledge verified against roam-electric.com, August 2026.
  * ========================================================================== */
@@ -25,10 +33,34 @@
 
   var CFG            = window.RoamAssistantConfig || {};
   var API_ENDPOINT   = CFG.apiEndpoint   || '';
+
+  /* How much of the answering the model is allowed to do.
+
+       'guarded'  (default) The model writes the answer for every question that
+                  is not a location lookup, a parts lookup or a live UI action.
+                  It is given the approved answer for the question as grounding,
+                  and every reply is checked against the approved figures,
+                  places and partners before it reaches the screen. A reply that
+                  fails the check is discarded and the built-in answer is shown
+                  instead, so the model can widen coverage but cannot invent.
+       'strict'   The pre-2026-08 behaviour. The model only sees questions the
+                  built-in knowledge already answers. Kept as the rollback.
+       'off'      No model at all, built-in knowledge only.
+
+     With no apiEndpoint configured every mode behaves as 'off'. */
+  var AI_MODE = CFG.aiMode || 'guarded';
+
+  /* Set true to log why a model reply was rejected. Off in production. */
+  var AI_DEBUG = !!CFG.aiDebug;
   var LEADS_ENDPOINT = CFG.leadsEndpoint || '';
   var LEADS_SECRET   = CFG.leadsSecret   || '';   // must match SHARED_SECRET in the Apps Script
   var WHATSAPP       = CFG.whatsapp      || '254740666555';
   var PHONE          = '+254 740 666 555';
+  /* Roam's official privacy notice. Left empty until Roam's legal owner has
+     approved the page and its URL: an assistant linking to a notice that does
+     not exist yet is worse than one that links to none. Set it in
+     window.RoamAssistantConfig as privacyUrl. */
+  var PRIVACY_URL    = CFG.privacyUrl    || '';
   // Book a Free Test Ride form: responses are recorded straight into Roam's lead sheet.
   // This is the published /d/e/ link from Roam's own FAQ pack, not the /d/ editor link.
   /* Roam's own Book a Free Test Ride page. It walks the rider through county,
@@ -120,6 +152,12 @@
   };
 
   var CASH = { single: '296,000', dual: '430,000' };
+
+  /* A battery on its own, sold and financed separately from the motorcycle.
+     Kept apart from CASH on purpose: "how much is the battery" and "how much
+     is the Roam Air" are different questions, and answering the first with the
+     second is the intent error Roam flagged. Approved August 2026. */
+  var BATTERY_PRICE = { cash: '123,000', deposit: '5,000' };
 
   var MEDIA = {
     'solar expedition': {
@@ -231,6 +269,12 @@
     'A correct "I do not have confirmed information on that" is always better than an irrelevant, inferred or invented answer.',
     'RELEVANCE MATTERS MORE THAN COMPLETENESS. Never answer a question just because you hold some Roam information that sounds related.',
     '',
+    'CLASSIFY THE INTENT BEFORE YOU ANSWER. Never answer on the strength of a single keyword. The words "Roam", "battery", "buy", "price", "parts", "charging" and "location" do NOT decide the answer on their own. Read the whole sentence and the conversation, work out what the customer is actually trying to do, and only then choose what to say. Understand, then classify, then retrieve, then answer.',
+    'THE INTENTS YOU MUST TELL APART: buying a complete motorcycle; the motorcycle price; the battery price; a spare part; a part price; the Roam Cart; financing; where to charge; where to rent a battery; where to service or repair; whether Roam is in a given country; whether Roam is in a given city or county; requesting a quote; talking to a person.',
+    'WORST FAILURE, NEVER REPEAT IT. Customer: "Can I get spare parts?" Wrong answer: "Yes, you can buy a Roam Air today. Pay cash or finance from KES 15,000." That is an intent failure. A parts question gets the parts answer: yes, Roam Air spare parts are available, searchable by part name, part number or by describing what is damaged, and addable to the Roam Cart. Do NOT mention buying a Roam Air, the KES 15,000 deposit, test rides or motorcycle financing on a parts question unless the customer separately asks about buying the motorcycle.',
+    'PARTS ARE NOT MOTORCYCLES. "I want a new battery" is not "I want a new Roam". "I need a new charger" is not "I want to buy Roam Air". "I need a brake pedal" is not "I want to buy the bike". This distinction is mandatory.',
+    'SALES INTENT MUST NOT OVERRIDE INFORMATION INTENT. Not every conversation is a sales pitch. Asked the battery price, give the battery price. Asked where to charge, give the location. Asked about spare parts, answer parts. Introduce financing, test rides and other sales calls to action only when they are actually relevant.',
+    '',
     'ANSWER THE EXACT QUESTION ASKED. Do not answer a related question, a broader question, a nearby topic, or what you think they "probably meant".',
     'Before you answer, check: does the information below directly answer THIS question, in the same subject area? If not, do not use it. Say you do not have it confirmed and give the escalation instead.',
     'Worked example of the failure to avoid. Asked "Are you in Eldeyo Market?" the subject is location availability, not durability. Answering "Roam Air is built for Kenyan roads" is WRONG. The correct reply is that you do not have confirmed availability for that place and they should call ' + PHONE + '.',
@@ -242,6 +286,21 @@
     'IF TWO READINGS ARE GENUINELY PLAUSIBLE, ask one short clarifying question. Do not ask for clarification when the question is already clear, and do not use a clarification as a way to avoid answering.',
     '',
     'USE THE CONVERSATION. A short follow-up like "and if I want two batteries?" continues the previous subject. Do not treat it as a brand new question.',
+    '',
+    '"BATTERY" IS THE MOST OVERLOADED WORD A CUSTOMER USES. Work out the object and the intent, never just the keyword:',
+    '- "How much is Roam Air?" is the motorcycle price.',
+    '- "How much is the battery?" is the BATTERY price, not the motorcycle price.',
+    '- "How much is a Roam Air with two batteries?" is the motorcycle price for the dual-battery package.',
+    '- "I need another battery" is a spare or additional battery.',
+    '- "How long does the battery last?" is range and durability.',
+    '- "Where can I charge my battery?" is a charging location question.',
+    'Never answer a battery-price question with the full motorcycle price.',
+    '',
+    'GEOGRAPHY IS NOT ONE THING. Do not treat every place name as equivalent. Country (Kenya, Uganda, Rwanda, Tanzania, Ethiopia). County (Nairobi County, Nakuru County, Machakos County, Kiambu County). City or town (Nairobi, Nakuru, Machakos, Thika, Mombasa, Kisumu). Area or neighbourhood (Kayole, Roysambu, Langata, Outering, Karambee). Specific place or landmark (Quickmart Roysambu, TotalEnergies Wayaki Way).',
+    '"Are you in Uganda?" is a COUNTRY AVAILABILITY question. Answer it as one. Do not search for a Kenyan hub.',
+    '"Are you in Nakuru?" is a CITY availability question. Do not conclude Roam is unavailable simply because Nakuru is not in the hub list.',
+    'DISTINGUISH THESE TWO STATEMENTS, THEY ARE NOT THE SAME THING: "Roam does not currently have a listed Hub in Nakuru in our current location database" is a fact about the database and you may say it. "Roam is not available in Nakuru" is a claim about the market and you may NOT say it.',
+    'NEVER SAY "CLOSEST" OR "NEAREST" WITHOUT GEOGRAPHIC REASONING, and never state a distance in kilometres. You cannot calculate distance. The widget does that from real coordinates and shows the result itself. Do not write "roughly 132 km away" or anything like it. If a rider has not told you where they are, ask: "Sure, what area, town or county are you in? I will find the closest Roam Hub for you."',
     '',
     'NEVER INVENT: shops, dealers, charging stations, service centres, countries of operation, prices, deposits, rates, promotions, stock levels, colours, warranty outcomes, or financing approvals. If it is not written below, it is unknown.',
     'NEVER CLAIM LIVE INFORMATION. You cannot see stock, an account, a financing decision, or the nearest Roam Point. Do not say you checked anything.',
@@ -290,6 +349,19 @@
     '• Built to handle rain, dust and everyday riding on tough African roads',
     '• Cash price: KES 296,000 (single battery + 1 charger) or KES 430,000 (dual battery + 2 chargers)',
     'GEN 2: co-designed with boda boda riders, launched June 2025; lifted local production to 36%.',
+    '',
+    'BATTERY PRICE (approved, and separate from the motorcycle price): a Roam Air Gen 3 battery on its own is KES ' + BATTERY_PRICE.cash + '. Financing for a battery is available separately from a deposit of KES ' + BATTERY_PRICE.deposit + '. Use these figures for battery-price questions, including spare and additional batteries. Do NOT quote KES 296,000 or KES 430,000 for a battery: those are complete motorcycle prices. If a customer asks about a battery configuration you do not have a figure for, say so and give ' + PHONE + '.',
+    '',
+    'CUSTOMER DATA AND PRIVACY:',
+    '- Treat a name, phone number, location, order details and enquiry details as personal data.',
+    '- Do NOT casually ask for a phone number. Ask only when it is needed for a parts order follow-up, a quote, a sales call back, a test-ride booking, a service follow-up or a support escalation. A question like "How much is a brake cable?" has a complete answer, so do not ask for a number to deliver it.',
+    '- When you do ask, say why first: "Would you like a Roam representative to contact you about this? If yes, share your phone number. We will use it to follow up on your request."',
+    '- NEVER make absolute privacy promises. Do not say "your data is 100% safe", "your number will never be shared", "completely secure" or "we guarantee your privacy". Say instead that their contact details will be handled according to Roam\'s privacy and data-protection practices and used for the purpose they provided them for.',
+    '- Marketing consent is a SEPARATE choice from being contacted about a request. Never treat a number given for a quote as agreement to receive offers, and never make marketing consent a condition of getting ordinary product information.',
+    '- Do not ask for an ID number, date of birth, home address, employment details or financial information.',
+    '- Do not state a data-retention period. Roam has not published one to you.',
+    '- If someone asks what information Roam holds about them, or asks to delete their number, stop being contacted or stop their data being used, do not attempt it yourself and do not promise it is done. Say you can help them send that request to the Roam team, and give ' + PHONE + '.',
+    '- You are not providing legal advice, and you do not speak for Roam\'s legal or privacy team.',
     '',
     'CURRENT CAMPAIGN MESSAGING (use this language naturally, it is how Roam is talking to customers right now):',
     '• "Ride Everywhere. Charge Anywhere." and "Own Your Power. Trust Every Mile."',
@@ -416,8 +488,11 @@
     { k: /\bmachakos\b/, a: 'Yes. Roam Shop Machakos serves that area.' }
   ];
 
-  /* Words that follow "in / at / near" but are not places. */
-  var NOT_A_PLACE = /^(stock|business|charge|touch|person|store|the|a|an|my|your|our|this|that|it|kenya|there|here|town|area|county|counties|general|total|fact|order|time|need|use|mind|control|africa|east)$/;
+  /* Words that follow "in / at / near" but are not places. Kept deliberately
+     wide, because a service question with a named place is now treated as a
+     location question ("Can I charge in Nakuru?"), and a false place turns an
+     ordinary product question into "no Roam location at Bulk". */
+  var NOT_A_PLACE = /^(stock|business|charge|charging|touch|person|store|the|a|an|my|your|our|this|that|it|kenya|there|here|town|area|county|counties|general|total|fact|order|time|need|use|mind|control|africa|east|bulk|cash|advance|full|instal(l)?ments?|months?|weeks?|days?|hours?|minutes?|years?|rain|sun|dust|mud|water|traffic|transit|writing|future|case|addition|particular|terms|price|prices|kes|ksh|swahili|english|kenyan|detail|details|depth|short|long|one|two|three|four|five|some|any|all|both|between|front|back|rear|dark|public|private|person|question|reality|practice|principle|theory|stages?|phases?|steps?|parts?|spares?|batter(y|ies)|shops?|hubs?|stations?)$/;
 
   /* ==========================================================================
      ROAM OPERATIONAL LOCATIONS
@@ -565,6 +640,61 @@
     { n:'Kilifi',        k:/\bkilifi\b/,                                    lat:-3.6300, lng:39.8500 },
     { n:'Voi',           k:/\bvoi\b/,                                       lat:-3.3960, lng:38.5560 },
     { n:'Garissa',       k:/\bgarissa\b/,                                   lat:-0.4530, lng:39.6460 }
+  ];
+
+  /* ==========================================================================
+     GEOGRAPHY IS NOT ONE THING
+
+     "Are you in Uganda?", "Are you in Nakuru County?", "Are you in Nakuru?"
+     and "Can I charge in Kayole?" are four different questions, and answering
+     any of them with the machinery meant for another is how the assistant used
+     to tell a rider in Nakuru that Roam was 132 km away as though that settled
+     it. Five levels, each with its own answer shape:
+
+       country    Kenya, Uganda, Rwanda      -> availability, never a hub search
+       county     Nakuru County, Kiambu      -> every listed station in it
+       city/town  Nakuru, Thika, Mombasa     -> stations there, then distance
+       area       Kayole, Roysambu, Langata  -> stations there, then distance
+       landmark   Quickmart Roysambu         -> the partner table
+
+     COUNTIES carries the stations each county actually contains, so a county
+     with Roam presence is never told it has none, and a county without one is
+     told plainly that there is no LISTED HUB there, which is a different
+     statement from "Roam is not available".
+     ========================================================================== */
+  var COUNTY_WORD = /\bcount(y|ies)\b|\bkaunti\b/;
+
+  var COUNTIES = [
+    { n:'Nairobi',  k:/\bnairobi\b/,        lat:-1.2864, lng:36.8172,
+      sites:['Outering','Wayaki Way','Kayole','Lusaka Road','Roysambu','Forest Road',
+             'Karambee','Ojijo','Roam Park','Suguta','Nairobi Regional Office',
+             "Adam's Minimall",'Langata'] },
+    { n:'Machakos', k:/\bmachakos\b/,       lat:-1.5177, lng:37.2634,
+      sites:['Sabaki','Machakos Town','Machakos Centre'] },
+    { n:'Kiambu',   k:/\bkiambu\b/,         lat:-1.1714, lng:36.8356,
+      sites:['Thika Centre'] },
+    { n:'Homa Bay', k:/\bhoma ?bay\b/,      lat:-0.5273, lng:34.4571,
+      sites:['Wetu Hub Homabay'] },
+    { n:'Nakuru',   k:/\bnakuru\b/,         lat:-0.3030, lng:36.0800, sites:[] },
+    { n:'Kajiado',  k:/\bkajiado\b/,        lat:-1.8525, lng:36.7767, sites:[] },
+    { n:'Murang\'a',k:/\bmurang'?a\b/,      lat:-0.7210, lng:37.1520, sites:[] },
+    { n:'Kisumu',   k:/\bkisumu\b/,         lat:-0.0917, lng:34.7680, sites:[] },
+    { n:'Mombasa',  k:/\bmombasa\b/,        lat:-4.0435, lng:39.6682, sites:[] },
+    { n:'Uasin Gishu', k:/\buasin ?gishu\b|\beldoret\b/, lat:0.5140, lng:35.2700, sites:[] },
+    { n:'Nyeri',    k:/\bnyeri\b/,          lat:-0.4200, lng:36.9480, sites:[] },
+    { n:'Meru',     k:/\bmeru\b/,           lat: 0.0470, lng:37.6500, sites:[] },
+    { n:'Kakamega', k:/\bkakamega\b/,       lat: 0.2827, lng:34.7519, sites:[] },
+    { n:'Kilifi',   k:/\bkilifi\b/,         lat:-3.6300, lng:39.8500, sites:[] },
+    { n:'Kisii',    k:/\bkisii\b/,          lat:-0.6810, lng:34.7670, sites:[] },
+    { n:'Kericho',  k:/\bkericho\b/,        lat:-0.3670, lng:35.2830, sites:[] },
+    { n:'Embu',     k:/\bembu\b/,           lat:-0.5310, lng:37.4500, sites:[] },
+    { n:'Kitui',    k:/\bkitui\b/,          lat:-1.3670, lng:38.0100, sites:[] },
+    { n:'Garissa',  k:/\bgarissa\b/,        lat:-0.4530, lng:39.6460, sites:[] },
+    { n:'Laikipia', k:/\blaikipia\b|\bnanyuki\b/, lat: 0.0170, lng:37.0730, sites:[] },
+    { n:'Bungoma',  k:/\bbungoma\b/,        lat: 0.5630, lng:34.5600, sites:[] },
+    { n:'Migori',   k:/\bmigori\b/,         lat:-1.0630, lng:34.4730, sites:[] },
+    { n:'Nyandarua',k:/\bnyandarua\b|\bnyahururu\b/, lat: 0.0360, lng:36.3630, sites:[] },
+    { n:'Taita Taveta', k:/\btaita ?taveta\b|\bvoi\b/, lat:-3.3960, lng:38.5560, sites:[] }
   ];
 
   /* The host brands riders use as landmarks: "the Total on Outering". */
@@ -805,6 +935,40 @@
   /* Swahili and Sheng words that mean something is broken. */
   var BROKEN = /imeharibika|imevunjika|haifanyi|broken|damaged|faulty|cracked|not working|imepotea|nimepoteza|imeisha|worn out|need(s)? (a )?new|replac(e|ing|ement)|imechoka|inahitaji/;
 
+  /* ==========================================================================
+     PARTS ARE NOT MOTORCYCLES, AND BATTERIES ARE NEITHER
+
+     The worst intent failure the assistant produced was answering "Can I get
+     spare parts?" with "Yes, you can buy a Roam Air today, finance it from
+     KES 15,000." Three separate things a customer can want, collapsed into
+     one because the word "get" outranked the word "parts":
+
+       a complete motorcycle   -> purchase, financing, test ride
+       a battery               -> battery pricing, sold and financed separately
+       a spare part            -> the Roam Parts catalogue and the Roam Cart
+
+     PARTS_GENERAL catches the parts enquiry that names no specific component,
+     which is the one that used to fall through to the sales pitch. A question
+     that names a part ("how much is a brake cable") never reaches it, because
+     the catalogue search answers that first.
+     ========================================================================== */
+  var PARTS_GENERAL = /\b(spare ?parts?|spares)\b|\bparts?\b[\s\S]{0,20}\b(catalogue|catalog|available|availability|for sale)\b|\b(get|buy|order|find|need|want|sell|sells|selling|stock|stocks|have|supply|source|purchase)\b[\s\S]{0,22}\bparts?\b|\bparts?\b[\s\S]{0,16}\b(shop|store|sold|sell|buy)\b|^(roam )?parts\b/;
+
+  /* Battery wording that is NOT about what a battery costs. Every one of these
+     has its own answer elsewhere, and letting the price engine take them is
+     how "how long does the battery last" became a price quote. */
+  var BATTERY_NOT_PRICE = /\brange\b|how far|how long|last\b|lasts\b|durab|degrad|cycle|life\b|charg|swap|rent|rental|hire|borrow|weigh|heavy|\bkg\b|size|spec|volt|\bip67\b|waterproof|water|remov|warrant|guarantee|own\b|owns\b|mine\b|belong|lease|include[ds]?\b|capacit|\bkwh\b|health|replace under|where\b|wapi\b/;
+  var BATTERY_WORD      = /\bbatter(y|ies)\b|\bbetri\b|\bbattery\b/;
+  /* Wording that means the complete motorcycle, so "a Roam Air with two
+     batteries" stays a motorcycle price and does not become a battery one. */
+  var WHOLE_BIKE        = /\broam air\b|\bmotorcycle\b|\bmotor ?bike\b|\bpikipiki\b|\bthe bike\b|\ba bike\b|\bthe motorbike\b|\bcomplete\b|\bwhole\b/;
+  var PRICE_ASK         = /how much|price|pricing|cost|costs|bei\b|ngapi\b|gharama|what does .{0,24}cost|charge for/;
+  var BUY_ASK           = /\b(buy|buying|purchase|purchasing|order|acquire|get|need|want)\b/;
+  var EXTRA_BATTERY     = /\b(spare|extra|another|second|additional|one more|new)\b/;
+  /* Named battery hardware and battery services. Each has its own price in the
+     parts catalogue or the service table, so none of them is "the battery". */
+  var BATTERY_COMPONENT = /\b(assessment|diagnos\w*|inspection|display|screen|compartment|harness|connector|cables?|bms|holder|lock|latch|door|mount|bracket|tray|terminal|fuse|relay|switch|header|soc)\b/;
+
   var FALLBACK = {
     location:
       "I don't have a confirmed Roam location at {x} in my current location data.\n" +
@@ -897,6 +1061,13 @@
       '• No ongoing swap fees\n' +
       '• That ownership is what protects your resale value\n' +
       'Want to see the financing plans?' },
+
+    { c:'battery_life', a:
+      'The Roam Air battery is guaranteed for 100,000 km.\n' +
+      '• Up to 80 km of range on one battery, up to 160 km on two\n' +
+      '• Charge it daily, the same way you charge a phone\n' +
+      '• Look after it and it comfortably outlasts a petrol engine rebuild\n' +
+      'For anything on capacity or long-term battery health, the team will confirm it on ' + PHONE + '.' },
 
     { c:'battery_specs', a:
       'The Roam Air Gen 3 battery:\n' +
@@ -1185,16 +1356,26 @@
     { c:'charging_time', m:/(how )?long[\s\S]{0,25}charg|charg\w*[\s\S]{0,15}(time|take|hours?)|full charge|fast charg|charging speed|how (fast|quick)[\s\S]{0,20}charg/ },
     { c:'home_charging', m:/charg\w*[\s\S]{0,20}(at home|home|house|indoors|wall|socket|outlet|plug)|(home|house|indoors)[\s\S]{0,20}charg|\bplug it in\b|normal socket|standard socket|wall socket|special charger|charg\w*[\s\S]{0,25}where i (live|stay)/ },
     { c:'solar',         m:/solar|off.?grid|generator|blackout|power (cut|goes off)|no electricity/ },
-    { c:'charging_where',m:/where[\s\S]{0,25}charg|charg\w*[\s\S]{0,20}(station|point|hub|network|location)|roam point|roam hub|swap station|public charging|where.{0,20}(riders )?charge|charging options?\b/ },
+    /* "Can I charge in Kenya?" named no station and asked no "where", so it
+       matched no charging intent at all and escalated. Charging is a question
+       Roam can always answer; only the specific place may be unknown. */
+    { c:'charging_where',m:/where[\s\S]{0,25}charg|charg\w*[\s\S]{0,20}(station|point|hub|network|location)|roam point|roam hub|swap station|public charging|where.{0,20}(riders )?charge|charging options?\b|\b(can|could|may) i charge\b|\bplaces? to charge\b/ },
 
     // Purchase family, most specific first
     { c:'sales_location',m:/\bwhere\b[\s\S]{0,30}\b(buy|get|purchase|order|acquire)\b|\b(buy|get|purchase|order|acquire)\b[\s\S]{0,30}\bwhere\b|where (can|do) i (buy|get)|which shop.{0,20}(buy|get)|find a roam (air|bike|motorcycle)/ },
     { c:'financing',     m:/financ|loan|deposit|instal(l)?ment|hire purchase|repay|pay.{0,10}(month|daily|day)|m.?kopa|watu|rafiki|platinum credit|fortune credit|credit\b|afford|own the bike|how much[\s\S]{0,20}(to start|to begin|do i need|upfront|down)|get started|what do i need to (start|begin)/ },
     { c:'pricing',       m:/\bprice\b|pricing|cost of the bike|how much (is|for|does)[\s\S]{0,25}(bike|roam|motorcycle|it|cost)|cash price|buy it outright|\brrp\b|what does it cost|how much is it|\b(roam|roam air|bike|motorcycle)\s+how much/ },
-    { c:'buy',           m:/\b(buy|buying|purchase|purchasing|order|acquire)\b|\bi want\b(?!\s+to (know|understand|ask|check|confirm|see if|hear))|\bcan i (get|have|own|take)\b|\bget one\b|\bhow (do|can) i (get|own|order)\b|\bown one\b|\bi need a (roam|bike|motorcycle)\b/ },
+    { c:'buy',           m:/\b(buy|buying|purchase|purchasing|order|acquire)\b|\bi want\b(?!\s+to (know|understand|ask|check|confirm|see if|hear))|\bcan i (get|have|own|take)\b|\bget one\b|\bhow (do|can) i (get|own|order)\b|\bown one\b|\bi need a (new |another |second )?(roam|bike|motorcycle|motorbike|pikipiki)\b/ },
 
     { c:'savings',       m:/save|saving|cheaper|petrol|fuel cost|compare.{0,15}(petrol|fuel)|versus (petrol|fuel)|swap.{0,12}(cost|cheaper)/ },
     { c:'battery_owner', m:/own[\s\S]{0,20}batter|batter[\s\S]{0,20}(mine|own|belong|include|lease|rent)|swap(ping)?\b|rent the batter|lease the batter|keep the batter|pay for the batter|\bown (it|them) outright\b/ },
+    /* "How long does the battery last?" is a question about lifespan, and it
+       used to be answered with the battery's weight, because both live under
+       battery_specs and "battery" was the only word that had to match. Split
+       out and placed first, so the object of the question decides the answer.
+       Capacity, cycle counts and degradation are unaffected: NOT_APPROVED
+       takes those before any intent is considered. */
+    { c:'battery_life',  m:/how long[\s\S]{0,25}batter|batter[\s\S]{0,25}(last|lasts|lifespan|life span)|life of the batter|batter[\s\S]{0,20}wear out|how many (km|kilometres|kilometers|years)[\s\S]{0,25}batter/ },
     { c:'battery_specs', m:/batter[\s\S]{0,25}(weigh|heavy|kg|size|spec|type|made|casing|waterproof|ip67|volt|72v|remov)|(weigh|heavy|how big)[\s\S]{0,20}batter|batter[\s\S]{0,20}(life|last|degrad|cycle|replac|health)|how long[\s\S]{0,20}batter/ },
     { c:'performance',   m:/how fast|top speed|acceleration|\btorque\b|\bmotor\b|horsepower|\bpower\b|climb|hill|riding mode|\bspecs?\b|specification/ },
     { c:'payload',       m:/payload|carry|\bload\b|luggage|cargo|goods|passenger|pillion|\bboda\b|delivery box|how much weight/ },
@@ -1383,6 +1564,14 @@
 '.rai-lead-skip{background:none;border:none;color:var(--faint);font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;padding:8px 4px;text-decoration:underline;}',
 '.rai-lead-skip:hover{color:var(--dim);}',
 '.rai-lead-privacy{font-size:10.5px;line-height:1.5;color:rgba(255,255,255,.34);margin-top:11px;}',
+/* ---- purpose and consent ---- */
+'.rai-lead-consent{margin-top:11px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:rgba(0,0,0,.22);}',
+'.rai-lead-purpose{font-size:11px;line-height:1.5;color:var(--dim);margin-bottom:8px;}',
+'.rai-lead-purpose b{color:var(--white);font-weight:700;}',
+'.rai-consent-row{display:flex;gap:9px;align-items:flex-start;font-size:11.5px;line-height:1.5;color:var(--dim);cursor:pointer;padding:3px 0;}',
+'.rai-consent-row input{appearance:none;-webkit-appearance:none;width:15px;height:15px;flex-shrink:0;margin-top:1px;border:1px solid var(--line-strong);border-radius:4px;background:var(--ink-900);cursor:pointer;position:relative;}',
+'.rai-consent-row input:checked{background:var(--orange);border-color:var(--orange);}',
+'.rai-consent-row input:checked::after{content:"";position:absolute;left:4.5px;top:1px;width:4px;height:8px;border:solid var(--orange-ink);border-width:0 2px 2px 0;transform:rotate(45deg);}',
 '.rai-lead-done{display:flex;gap:11px;align-items:flex-start;}',
 '.rai-lead-tick{width:22px;height:22px;border-radius:50%;background:var(--orange);color:var(--orange-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:800;font-size:12px;margin-top:1px;}',
 
@@ -2286,13 +2475,53 @@
     return m ? '+254' + m[1] : null;
   }
 
-  function leadForm(reason, question) {
+  /* ==========================================================================
+     WHY THE NUMBER IS BEING ASKED FOR
+
+     Kenya's data-protection framework requires personal data to be collected
+     for a specified, explicit and legitimate purpose and limited to what that
+     purpose needs. So the form states the purpose, records it alongside the
+     number, and asks for nothing beyond it. A rider who just wants a price
+     never sees this form at all.
+     ========================================================================== */
+  var LEAD_PURPOSE = {
+    answer:    'Answering your question',
+    parts:     'Parts quote follow-up',
+    test_ride: 'Test ride booking',
+    buses:     'Bus availability update',
+    sales:     'Sales enquiry'
+  };
+
+  /* Never an absolute promise. "Your data is 100% safe" and "your number can
+     never be shared" are guarantees the assistant is in no position to give,
+     and saying them is worse than saying nothing. */
+  var PRIVACY_LINE =
+    'Your contact details will be handled according to Roam\'s privacy and ' +
+    'data-protection practices and used for the purpose above.';
+
+  function consentBlock(purpose) {
+    return '<div class="rai-lead-consent">' +
+      '<div class="rai-lead-purpose"><b>Purpose:</b> ' + esc(purpose) + '</div>' +
+      '<label class="rai-consent-row"><input type="checkbox" id="rai-l-consent" checked>' +
+        '<span>Contact me about this request.</span></label>' +
+      /* Deliberately separate, and deliberately unticked. Giving a number for a
+         parts quote is not agreement to be marketed to, and bundling the two
+         is what makes consent neither specific nor freely given. */
+      '<label class="rai-consent-row"><input type="checkbox" id="rai-l-marketing">' +
+        '<span>I would also like updates and offers from Roam. (Optional)</span></label>' +
+      '</div>';
+  }
+
+  function leadForm(reason, question, purpose) {
     return '<div class="rai-panel rai-lead" id="rai-lead"' +
-        (question ? ' data-question="' + esc(question) + '"' : '') + '>' +
+        (question ? ' data-question="' + esc(question) + '"' : '') +
+        ' data-purpose="' + esc(purpose || (question ? LEAD_PURPOSE.answer : LEAD_PURPOSE.sales)) + '">' +
       '<div class="rai-eyebrow">' + (question ? 'Get an Answer' : 'Talk to Sales') + '</div>' +
       '<div class="rai-lead-title">' +
-        (question ? 'We will get you a proper answer' : 'Want a Roam rep to call you back?') + '</div>' +
-      '<div class="rai-lead-sub">' + esc(reason) + ' Leave your number and the team will be in touch, usually the same working day.</div>' +
+        (question ? 'We will get you a proper answer'
+                  : 'Would you like a Roam representative to contact you about this?') + '</div>' +
+      '<div class="rai-lead-sub">' + esc(reason) +
+        ' If yes, share your phone number. We will use it to follow up on your request.</div>' +
       (question ? '<div class="rai-quoted"><span>Your question</span>' + esc(question) + '</div>' : '') +
       '<div class="rai-field"><label for="rai-l-name">Your name</label>' +
         '<input type="text" id="rai-l-name" placeholder="e.g. Joseph Mwangi" autocomplete="name">' +
@@ -2302,16 +2531,26 @@
         '<div class="msg" id="rai-e-phone">Enter a valid Kenyan number, e.g. 0712 345 678</div></div>' +
       '<div class="rai-field"><label for="rai-l-email">Email <span style="text-transform:none;letter-spacing:0;font-weight:600;">(optional)</span></label>' +
         '<input type="email" id="rai-l-email" placeholder="you@example.com" autocomplete="email"></div>' +
+      consentBlock(question ? LEAD_PURPOSE.answer : (purpose || LEAD_PURPOSE.sales)) +
       '<div class="rai-lead-actions">' +
         '<button class="rai-lead-btn" id="rai-l-send">Request a call back</button>' +
         '<button class="rai-lead-skip" id="rai-l-skip">Not now</button></div>' +
-      '<div class="rai-lead-privacy">We use your details only to contact you about Roam products. ' +
-        'Prefer to talk now? <a href="https://wa.me/' + WHATSAPP + '" target="_blank" rel="noopener" style="color:var(--orange);">WhatsApp us</a> or call ' + PHONE + '.</div>' +
+      '<div class="rai-lead-privacy">' + PRIVACY_LINE +
+        (PRIVACY_URL ? ' <a href="' + esc(PRIVACY_URL) + '" target="_blank" rel="noopener" style="color:var(--orange);">Privacy notice</a>.' : '') +
+        ' Prefer to talk now? <a href="https://wa.me/' + WHATSAPP + '" target="_blank" rel="noopener" style="color:var(--orange);">WhatsApp us</a> or call ' + PHONE + '.</div>' +
       '</div>';
   }
 
-  function maybeOfferLead(userText) {
+  /* Questions that are simply answered do not need anyone's phone number.
+     "How much is a brake cable?" is the worked example in Roam's brief: it has
+     a complete answer, so asking for a number to deliver it is collecting
+     personal data with no purpose to justify it. */
+  var NO_LEAD_CATS = { parts:1, hub_location:1, locations:1, country:1, clarify:1,
+                       privacy:1, battery_price:1, charging_where:1, hours:1 };
+
+  function maybeOfferLead(userText, cat) {
     if (leadShown || leadCaptured) return;
+    if (NO_LEAD_CATS[cat]) return;
     if (!INTENT.test(userText.toLowerCase())) return;
     /* Not on the first answer. Asking one price question is not the same as
        wanting a call back, and a form under the very first reply reads as a
@@ -2319,14 +2558,21 @@
        second question first. */
     if (turns < 3) return;
     leadShown = true;
-    var reason = /\bbus(es)?\b|matatu|shuttle/.test(userText.toLowerCase())
+    var buses = /\bbus(es)?\b|matatu|shuttle/.test(userText.toLowerCase());
+    var reason = buses
       ? 'Buses are on hold right now, but we will let you know the moment that changes.'
       : 'It sounds like you are weighing up a Roam Air.';
-    setTimeout(function () { row(leadForm(reason), 'bot'); }, 550);
+    var purpose = buses ? LEAD_PURPOSE.buses
+      : (cat === 'test_ride' ? LEAD_PURPOSE.test_ride : LEAD_PURPOSE.sales);
+    setTimeout(function () { row(leadForm(reason, '', purpose), 'bot'); }, 550);
   }
 
+  /* The last few turns, not the whole session. A rep needs the context around
+     the request they are calling about; everything before that is personal
+     data travelling for no stated purpose. */
+  var TRANSCRIPT_TURNS = 12;
   function transcript() {
-    return history_.map(function (m) {
+    return history_.slice(-TRANSCRIPT_TURNS).map(function (m) {
       return (m.role === 'user' ? 'Visitor: ' : 'Assistant: ') + m.content;
     }).join('\n');
   }
@@ -2404,27 +2650,41 @@
     btn.disabled = true;
     btn.textContent = 'Sending…';
 
-    var leadEl = document.querySelector('.rai-lead[data-question]');
-    var askedQuestion = leadEl ? leadEl.getAttribute('data-question') : '';
+    var leadEl = document.querySelector('.rai-lead[data-question]') || $('rai-lead') ||
+                 document.querySelector('.rai-lead[data-purpose]');
+    var askedQuestion = leadEl ? (leadEl.getAttribute('data-question') || '') : '';
+    var purpose       = leadEl ? (leadEl.getAttribute('data-purpose') || LEAD_PURPOSE.sales)
+                               : LEAD_PURPOSE.sales;
+    var marketingEl   = $('rai-l-marketing');
 
     var params = new URLSearchParams(window.location.search);
+    /* Purpose limitation and data minimisation, in the shape of a payload.
+       What goes to Roam is what the follow-up needs: who to call, what about,
+       and what they agreed to. The device fingerprint that used to ride along
+       in `userAgent` served no follow-up purpose, so it no longer travels, and
+       the transcript is capped rather than sent whole. */
     var payload = {
       secret: LEADS_SECRET,
       name: name,
       phone: phone,
       email: email,
       interest: 'Roam Air',
+      purpose: purpose,
+      /* Two consents, recorded separately, because they are two decisions.
+         Giving a number so Roam can answer a parts question is not agreement
+         to receive offers, and a single tick cannot stand for both. */
+      contactConsent: true,
+      marketingConsent: !!(marketingEl && marketingEl.checked),
       // populated when the visitor asked something we could not answer:
       // this is the exact question the rep needs to come back on
       unansweredQuestion: askedQuestion,
       transcript: transcript(),
-      page: window.location.href,
+      page: window.location.href.split('#')[0],
       referrer: document.referrer || '',
       utm_source: params.get('utm_source') || '',
       utm_medium: params.get('utm_medium') || '',
       utm_campaign: params.get('utm_campaign') || '',
-      submittedAt: new Date().toISOString(),
-      userAgent: navigator.userAgent
+      submittedAt: new Date().toISOString()
     };
 
     // remember them, so the booking form opens already filled in
@@ -2472,7 +2732,7 @@
       s += (b.q > 1 ? b.q + ' x ' : '') + esc(b.d) + ' — ' + ksh(b.t * b.q) + '<br>';
     });
     s += '<b>Estimated total: ' + ksh(t.total) + '</b></div>';
-    return '<div class="rai-panel rai-lead" id="rai-pq">' +
+    return '<div class="rai-panel rai-lead" id="rai-pq" data-purpose="' + esc(LEAD_PURPOSE.parts) + '">' +
       '<div class="rai-eyebrow">Roam Parts Quote Request</div>' +
       '<div class="rai-lead-title">Tell us where you are and we will complete your parts request.</div>' +
       s +
@@ -2490,7 +2750,10 @@
       '<div class="rai-lead-actions">' +
         '<button class="rai-lead-btn" id="rai-pq-send">Send quote request</button>' +
         '<button class="rai-lead-skip" id="rai-pq-skip">Not now</button></div>' +
-      '<div class="rai-lead-privacy">This is a draft estimate, not a final price. Roam will confirm current price, availability, compatibility and fitting.</div>' +
+      '<div class="rai-lead-privacy">This is a draft estimate, not a final price. Roam will confirm current price, availability, compatibility and fitting.<br>' +
+        PRIVACY_LINE +
+        (PRIVACY_URL ? ' <a href="' + esc(PRIVACY_URL) + '" target="_blank" rel="noopener" style="color:var(--orange);">Privacy notice</a>.' : '') +
+      '</div>' +
       '</div>';
   }
 
@@ -2526,18 +2789,23 @@
       email: '',
       location: location,
       interest: 'Roam Parts Quote',
+      /* A parts quote is its own purpose. Someone who gives a number to be
+         quoted for a brake cable has not asked to be added to anything else,
+         and this field is what stops that happening downstream. */
+      purpose: LEAD_PURPOSE.parts,
+      contactConsent: true,
+      marketingConsent: false,
       note: noteEl.value.trim(),
       items: itemsText,
       estimatedTotal: ksh(t.total),
       unansweredQuestion: '',
       transcript: transcript(),
-      page: window.location.href,
+      page: window.location.href.split('#')[0],
       referrer: document.referrer || '',
       utm_source: params.get('utm_source') || '',
       utm_medium: params.get('utm_medium') || '',
       utm_campaign: params.get('utm_campaign') || '',
-      submittedAt: new Date().toISOString(),
-      userAgent: navigator.userAgent
+      submittedAt: new Date().toISOString()
     };
 
     known.name = name; known.phone = phone;
@@ -2576,13 +2844,22 @@
   /* ==========================================================================
      ANSWERING
      ========================================================================== */
-  function askBackend(msg) {
+  /* The model call. `grounding` is the retrieval block for this one question,
+     sent as its own field so the standing system prompt stays byte-identical
+     between turns and stays cacheable at the provider. A proxy that does not
+     understand the field simply ignores it and the assistant still works. */
+  function askBackend(msg, local, grounding) {
     history_.push({ role: 'user', content: msg });
     if (!API_ENDPOINT) return Promise.reject(new Error('no api endpoint'));
     return fetch(API_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: SYSTEM_PROMPT, messages: history_ })
+      body: JSON.stringify({
+        system:   SYSTEM_PROMPT,
+        context:  grounding || '',
+        mode:     local ? local.lock : 'open',
+        messages: history_
+      })
     }).then(function (r) {
       if (!r.ok) throw new Error('api ' + r.status);
       return r.json();
@@ -2593,9 +2870,18 @@
         (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) ||
         d.reply;
       if (!reply) throw new Error('empty');
-      reply = String(reply).trim();
-      history_.push({ role: 'assistant', content: reply });
-      return { text: reply, unresolved: false };
+
+      /* Nothing the model writes reaches the screen unchecked. A reply that
+         fails verification is dropped, not patched and not retried, and the
+         built-in answer stands in for it. */
+      var v = verifyReply(reply, local || {}, msg, grounding);
+      if (!v.ok) {
+        if (AI_DEBUG && window.console) console.warn('[roam] model reply rejected:', v.why);
+        throw new Error('rejected: ' + v.why);
+      }
+
+      history_.push({ role: 'assistant', content: v.text });
+      return { text: v.text, unresolved: false, fromAI: true };
     });
   }
 
@@ -2827,6 +3113,18 @@
     for (var i = 0; i < PARTNERS.length; i++) if (PARTNERS[i].k.test(q)) return PARTNERS[i];
     return null;
   }
+  /* A county only when the rider actually said "county". Nakuru the town and
+     Nakuru the county are different questions with different answers, and
+     guessing which one they meant is exactly the error this table exists to
+     stop. */
+  function matchCounty(q) {
+    if (!COUNTY_WORD.test(q)) return null;
+    for (var i = 0; i < COUNTIES.length; i++) if (COUNTIES[i].k.test(q)) return COUNTIES[i];
+    return null;
+  }
+  function countyHubs(c) {
+    return HUBS.filter(function (h) { return c.sites.indexOf(h.s) !== -1; });
+  }
 
   var SERVICE_KEYS  = ['ch', 're', 'as', 'sh'];
   var SERVICE_NAMES = { ch:'charging', re:'battery rental', as:'after-sales', sh:'a shop' };
@@ -2922,17 +3220,50 @@
       return { h: h, km: kmBetween(origin, h) };
     }).sort(function (a, b) { return a.km - b.km; });
 
+    /* "No listed Roam Hub in Nakuru" and "Roam is not available in Nakuru" are
+       not the same statement, and the second one is not ours to make. Say what
+       the location database actually shows, then, and only because the
+       coordinates for both ends are in hand and the distance has genuinely
+       been calculated, name the closest listed station and how far it is. */
     var svc = wantCount(w) ? ' for ' + wantsPhrase(w) : '';
     if (ranked[0].km > 60) {
-      return stationReply('I do not have a Roam location listed near ' + label + '.\n' +
-        'The closest one on my list' + svc + ' is ' + hubName(ranked[0].h) +
-        ', roughly ' + Math.round(ranked[0].km) + ' km away.' + hubEscalation(),
+      return stationReply('📍 Roam does not currently have a listed Hub in ' + label +
+        ' in our current location database.\n' +
+        'The closest listed Roam Hub' +
+        (wantCount(w) ? ' offering ' + wantsPhrase(w) : '') + ' is ' + hubName(ranked[0].h) +
+        ', approximately ' + Math.round(ranked[0].km) + ' km away.' + hubEscalation(),
         [ranked[0].h], false);
     }
     var top = ranked.slice(0, 3);
     return finderReply('Closest to ' + label + svc + ': ' + hubName(top[0].h) +
       (top.length > 1 ? ', then ' + listNames(top.slice(1).map(function (r) { return r.h; })) : '') + '.',
       { rg:'near', f:w, origin:{ n:label, lat:origin.lat, lng:origin.lng } });
+  }
+
+  /* A county question, answered from the stations the county actually holds.
+     Runs before the station and area matching, because "Nakuru County" would
+     otherwise be read as the town of Nakuru and answered with a distance. */
+  function countyAnswer(q) {
+    var c = matchCounty(q);
+    if (!c) return null;
+
+    var w    = hubWants(q);
+    var name = c.n + ' County';
+    var hs   = countyHubs(c);
+    if (wantCount(w)) hs = hs.filter(function (h) {
+      return SERVICE_KEYS.every(function (k) { return !w[k] || h[k]; });
+    });
+
+    if (hs.length) {
+      return stationReply('Yes. ' + hs.length + ' listed Roam location' +
+        (hs.length === 1 ? '' : 's') +
+        (wantCount(w) ? ' offering ' + wantsPhrase(w) : '') + ' in ' + name + '.',
+        hs, hs.length <= 3);
+    }
+    /* Nothing listed in the county itself. Rank from the county headquarters,
+       which is a real coordinate, so the distance is calculated rather than
+       asserted. */
+    return nearestReply(c, w, name);
   }
 
   function hubAnswer(q) {
@@ -2952,6 +3283,20 @@
     var area     = matchArea(q);
     var nearWord = /\bnearest\b|\bclosest\b|\bnear me\b|\baround me\b|\bnearby\b/.test(q);
 
+    /* A service word plus a place name is a location question even when the
+       sentence never says "where". "Can I charge in Nakuru?", "Can I get spare
+       parts in Nakuru?" and "Can I service my Roam in Nakuru?" are all asking
+       about Nakuru, and each of them used to fall past this function and come
+       back as a generic product answer with no geography in it at all. */
+    var placed   = /\b(in|at|near|around)\s+[a-z]/.test(q);
+    var svcPlace = any && placed && (!!area || !!extractPlace(q));
+
+    /* "Can I get spare parts?" is a question about the parts catalogue, not
+       about which filling station happens to have a shop. Hand it to the
+       location engine only when the rider actually asked WHERE or named a
+       place; otherwise let the after-sales engine open Roam Parts. */
+    if (PARTS_GENERAL.test(q) && !st.length && !frame && !hubWord && !here && !svcPlace) return null;
+
     /* "Do you have after-sales?" — no place, just asking whether Roam does it. */
     var ow = { ch: OFFER_CH.test(q) ? 1 : 0, re: OFFER_RE.test(q) ? 1 : 0,
                as: OFFER_AS.test(q) ? 1 : 0, sh: OFFER_SH.test(q) ? 1 : 0 };
@@ -2959,7 +3304,7 @@
 
     /* ---- a named station ------------------------------------------------ */
     if (st.length) {
-      if (!(frame || any || contact || launch || box || here || hubWord)) return null;
+      if (!(frame || any || contact || launch || box || here || hubWord || svcPlace)) return null;
 
       if (st.length === 1) {
         var h = st[0];
@@ -2998,7 +3343,7 @@
     }
 
     /* ---- no station named ----------------------------------------------- */
-    if (!(frame || hubWord || here || generic || offer)) return null;
+    if (!(frame || hubWord || here || generic || offer || svcPlace)) return null;
     if (!any && !hubWord && !partner && !generic && !offer && !(area && (frame || here))) return null;
 
     /* A partner brand used as the landmark: "which Total stations have Roam?" */
@@ -3049,7 +3394,13 @@
     } else if (any) {
       lead = matching.length + ' Roam location' + (matching.length === 1 ? '' : 's') +
              ' list' + (matching.length === 1 ? 's' : '') + ' ' + wantsPhrase(w) + '.' +
-             (matching.length ? ' Tap one to open it in Google Maps.' : hubEscalation());
+             (matching.length ? ' Tap one to open it in Google Maps.' : hubEscalation()) +
+             /* Rule: a parts question answered with a map is only half an
+                answer. The catalogue is the other half. */
+             (PARTS_GENERAL.test(q)
+               ? '\n🔧 You can also search the Roam Parts catalogue here in the chat by part name, ' +
+                 'part number, or just tell me what is damaged.'
+               : '');
     } else {
       lead = 'Here are the Roam locations I have. Filter by what you need, or tell me your area ' +
              'and I will find the closest one.';
@@ -3472,6 +3823,21 @@
         '🔧 **Roam Parts.** Search a part, a part number, or just describe what\'s broken.' };
     }
 
+    /* ---- "Can I get spare parts?" --------------------------------------
+       The question Roam flagged. It names no component, so the catalogue
+       search below finds nothing, and before this block it fell all the way
+       through to the purchase intent and came back as a pitch for a complete
+       motorcycle. It is a parts question and it gets the parts experience:
+       no Roam Air, no KES 15,000 deposit, no test ride, no financing, unless
+       the customer separately asks about buying the bike. */
+    if (PARTS_GENERAL.test(q) && !findParts(q).length && !/\d{8}/.test(q)) {
+      return { unresolved: false, forced: true, cat: 'parts', ui: 'partsIntro', text:
+        '🔧 **Yes. Roam Air spare parts are available.**\n' +
+        '• Search the catalogue by part name, by part number, or describe what is damaged\n' +
+        '• Add what you need to your **Roam Cart**, adjust quantities and see the total\n' +
+        '• Not sure which part it is? Tell me what is wrong with the bike and I will narrow it down' };
+    }
+
     // ---- vague braking complaint with no named component -------------------
     if (/doesn'?t stop|not stopping|hard to stop|failing to stop|poor braking|weak brak|brak(e|ing)[\s\S]{0,15}(not (stop|work)|fail|spongy|weak)/.test(q) &&
         findParts(q).length !== 1) {
@@ -3498,7 +3864,15 @@
     /* Rider-care wording is not a parts enquiry, even when it shares a word
        with a part name ("safety gear" is not the Safety Bar). */
     if (/safety gear|safe riding|ride safe|what.{0,15}(gear|equipment).{0,15}(need|wear)|helmet|protective|best practice|care tips?|look after|maintain my|tyre pressure|chain slack|wash/.test(q)) return null;
-    if (!(wantsAdd || wantsPrice || partsish || broken)) return null;
+    /* "Can I get a brake cable?" is in Roam's own list of parts questions, and
+       it carries none of the words this gate looks for: no "part", no price,
+       nothing broken, nothing being added. So it fell through to the purchase
+       intent, where "can I get" reads as wanting a motorcycle, and came back
+       as a sales pitch for a Roam Air. If the sentence names exactly one
+       catalogue part and asks to obtain it, it is a parts question. */
+    var namesPart = /\b(get|have|need|want|buy|order|find|sell|sells|stock|supply|replace|source)\b/.test(q) &&
+                    findParts(q).length === 1;
+    if (!(wantsAdd || wantsPrice || partsish || broken || namesPart)) return null;
 
     // ---- more than one part named in the same message ----------------------
     var mp = multiPartRequest(q);
@@ -3569,6 +3943,75 @@
     return { unresolved: false, forced: true, cat: 'parts', ui: 'part', part: part, text: priceLine };
   }
 
+  /* ==========================================================================
+     BATTERY DISAMBIGUATION
+
+     "Battery" is the most overloaded word a Roam customer uses. Six readings,
+     and only one of them is a price:
+
+       "How much is Roam Air?"                  -> the motorcycle
+       "How much is the battery?"               -> the battery, on its own
+       "How much is a Roam Air with two?"       -> the motorcycle, dual pack
+       "I need another battery."                -> a spare, still the battery
+       "How long does the battery last?"        -> range and durability
+       "Where can I charge my battery?"         -> charging, a location question
+
+     This function claims only the second and fourth. Everything else is handed
+     back untouched, and the location engine has already taken the sixth before
+     we get here.
+     ========================================================================== */
+  function batteryAnswer(q) {
+    if (!BATTERY_WORD.test(q)) return null;
+    if (BATTERY_NOT_PRICE.test(q)) return null;   // range, charging, rental, specs, ownership
+    if (WHOLE_BIKE.test(q)) return null;          // "a Roam Air with two batteries"
+    /* "Battery assessment" is a workshop service and "battery compartment" is a
+       catalogue part. Both are priced from their own tables, and neither is the
+       battery. Defer to the after-sales engine for anything that names one. */
+    if (serviceMatch(q)) return null;
+    if (BATTERY_COMPONENT.test(q)) return null;
+
+    var wantsPrice = PRICE_ASK.test(q);
+    var wantsOne   = BUY_ASK.test(q) && (EXTRA_BATTERY.test(q) || /\bbatter/.test(q));
+    if (!wantsPrice && !wantsOne) return null;
+
+    var spare = EXTRA_BATTERY.test(q);
+    return {
+      unresolved: false, cat: 'battery_price', text:
+        '🔋 **Roam Air Gen 3 battery**\n' +
+        '• One battery on its own: KES ' + BATTERY_PRICE.cash + '\n' +
+        '• Financing is available separately, from a KES ' + BATTERY_PRICE.deposit + ' deposit\n' +
+        (spare
+          ? 'That is the spare or additional battery, bought on its own rather than with a bike.'
+          : 'That is the battery on its own. The complete Roam Air is priced separately.') + '\n' +
+        'Want me to show you the full motorcycle prices instead?'
+    };
+  }
+
+  /* ==========================================================================
+     CUSTOMER DATA REQUESTS
+
+     A rider asking to be forgotten is not asking a product question, and the
+     assistant is not the system of record. It does not hold the lead sheet and
+     cannot delete from it, so the only honest answer is a route to the people
+     who can. Hard-locked: this is the one reply on the whole widget where a
+     model improvising a warmer version could invent a promise Roam then has to
+     keep.
+     ========================================================================== */
+  var DATA_RIGHTS = /(delete|remove|erase|forget|wipe)[\s\S]{0,24}\b(my )?(number|phone|data|details|information|info|record|records)\b|stop (using|storing|keeping|holding|contacting|calling|messaging|texting)|(don'?t|do not|dont)[\s\S]{0,22}\b(contact|call|message|text|phone|reach)\s+me\b|unsubscribe|opt.?out|take me off|remove me from|what (information|data|details) do you (have|hold|keep|store)|what do you know about me|who (sees|has access to) my/;
+
+  function privacyAnswer(q) {
+    if (!DATA_RIGHTS.test(q)) return null;
+    return {
+      unresolved: false, forced: true, cat: 'privacy', text:
+        'I can help you send that request to the Roam team.\n' +
+        '• Tell me what you would like: a copy of your information, a correction, or deletion\n' +
+        '• Or contact Roam directly on ' + PHONE + '\n' +
+        'I do not hold or delete customer records myself. Roam handles personal data ' +
+        'according to its privacy and data-protection practices, and will action the request ' +
+        'and confirm it with you.'
+    };
+  }
+
   /* Do the maths for them, using only the approved KES 1 per kilometre figure.
      Never invents an electricity tariff or a petrol price. */
   function calcAnswer(q) {
@@ -3613,7 +4056,7 @@
   /* Returns { text, unresolved, forced, cat }.
      `unresolved` shows the one-tap routes to a human.
      `forced` means the guardrails answered and no model may override it. */
-  function answerLocally(text) {
+  function answerLocallyRaw(text) {
     var q = normalise(text), i, r;
 
     // Medium confidence: two readings are genuinely plausible. Ask once.
@@ -3627,18 +4070,36 @@
         'Tell me which and I will give you the details.' };
     }
 
+    /* A data request is not a product question and must never be answered with
+       one, so it is resolved before anything else looks at the words. */
+    r = privacyAnswer(q);  if (r) { lastCat = r.cat; return r; }
+
+    /* Geography, widest first: country, then county, then station or area.
+       Answering a country question with a hub search, or a county question
+       with the town of the same name, is the error this order prevents. */
     r = countryAnswer(q);  if (r) { lastCat = r.cat; return r; }
+    r = countyAnswer(q);   if (r) { lastCat = r.cat; return r; }
     /* The location database answers every hub, charging, rental, after-sales
        and shop location question before anything else gets a look in, so a
        question about where to go can never be answered with a product fact. */
     r = hubAnswer(q);      if (r) { lastCat = r.cat; return r; }
     r = locationAnswer(q); if (r) { lastCat = r.cat; return r; }
     r = calcAnswer(q);     if (r) { lastCat = r.cat; return r; }
+    /* Battery before parts and before the purchase intents: a battery is
+       neither a spare part nor a motorcycle, and both of those would otherwise
+       claim it. */
+    r = batteryAnswer(q);  if (r) { lastCat = r.cat; return r; }
     r = afterSalesAnswer(q); if (r) { lastCat = r.cat; return r; }
 
+    /* Questions Roam has not signed off an answer for. The figure itself stays
+       off limits, but the reply around it does not have to be a wall. `na`
+       marks these so the model may warm up the escalation and add whatever
+       approved context sits next to it, while the verifier keeps the missing
+       figure from being filled in from the model's own training data. */
     for (i = 0; i < NOT_APPROVED.length; i++) {
       if (NOT_APPROVED[i].m.test(q)) {
-        return { text: FALLBACK[NOT_APPROVED[i].f], unresolved: true, forced: true, cat: 'unknown' };
+        return { text: FALLBACK[NOT_APPROVED[i].f], unresolved: true, forced: true,
+                 cat: 'unknown', na: true };
       }
     }
 
@@ -3662,8 +4123,15 @@
       if (p) { lastCat = p.c; return { text: p.a, unresolved: false, cat: p.c }; }
     }
 
-    // Low confidence: genuinely unsupported. Escalate.
-    if (!cat) return { text: FALLBACK.general, unresolved: true, forced: true, cat: 'unknown' };
+    /* Nothing in the built-in knowledge classifies this question. This used to
+       be the end of the road, and it is the single biggest reason the Ask
+       section reads as shallow: a real question that simply did not match a
+       category got the same "I cannot confirm that" as a question Roam has
+       genuinely not approved. `open` hands it to the model with the whole
+       knowledge base instead, and the escalation below is what the visitor
+       sees only if the model is unreachable or its reply fails verification. */
+    if (!cat) return { text: FALLBACK.general, unresolved: true, forced: true,
+                       cat: 'unknown', open: true };
 
     lastCat = cat;
     if (cat === 'colour') return { text: FALLBACK.colour, unresolved: true, forced: true, cat: cat };
@@ -3676,7 +4144,492 @@
     var t = topicFor(cat);
     if (t) return { text: t, unresolved: false, cat: cat };
 
-    return { text: FALLBACK.general, unresolved: true, forced: true, cat: cat };
+    /* Classified, but the category holds no answer. The category is still
+       useful context, so let the model try before escalating. */
+    return { text: FALLBACK.general, unresolved: true, forced: true,
+             cat: cat, open: true };
+  }
+
+  /* --------------------------------------------------------------------------
+     HOW MUCH THE MODEL IS ALLOWED TO DO WITH A GIVEN ANSWER
+
+     The original design had one switch: `forced`, meaning the guardrails
+     answered and the model was never called. It made the assistant safe and it
+     made it shallow, because almost every path set it. These four tiers keep
+     the safety exactly where it was earning its keep and open up everything
+     else.
+
+       hard      The built-in answer is the answer. Anything that drives a panel
+                 (parts, cart, quote, hub cards, hub finder), resolves against
+                 the location database, or names a country. These are database
+                 lookups and UI actions, not prose, and a model rewording them
+                 is pure downside.
+       escalate  Roam has not approved an answer. The model may rewrite the
+                 escalation warmly and add adjacent approved facts, but the
+                 verifier rejects any reply that supplies the withheld figure.
+       open      No built-in answer exists. The model answers from the full
+                 knowledge base. This is where the new coverage comes from.
+       soft      A built-in answer exists and is correct. The model writes the
+                 reply with that answer in front of it, so the phrasing fits the
+                 question actually asked instead of being a canned paragraph.
+     -------------------------------------------------------------------------- */
+  var HARD_UI   = { part:1, checklist:1, cart:1, quote:1, partsIntro:1, hubs:1, hubFinder:1 };
+  /* `privacy` is hard-locked for the same reason as a hub lookup, but the
+     stakes are different: a model writing its own warmer version of a data
+     request reply is one sentence away from promising something Roam then has
+     to honour. This reply is Roam's to write, not the model's. */
+  var HARD_CATS = { parts:1, hub_location:1, locations:1, country:1, clarify:1, fault:1, privacy:1 };
+
+  function lockFor(r) {
+    if (!r) return 'open';
+    if (r.ui && HARD_UI[r.ui]) return 'hard';
+    if (HARD_CATS[r.cat])      return 'hard';
+    if (r.na)                  return 'escalate';
+    if (r.open)                return 'open';
+    return 'soft';
+  }
+
+  /* Every local answer carries its tier from here on. `forced` is left on the
+     object untouched, so anything still reading it keeps working. */
+  function answerLocally(text) {
+    var r = answerLocallyRaw(text);
+    r.lock = lockFor(r);
+    return r;
+  }
+
+  /* ==========================================================================
+     GROUNDING
+
+     What the model is given for this one question, on top of the standing
+     system prompt: the category the question classified into, the approved
+     answer if there is one, the closest FAQ entries, and what it is allowed to
+     do with them. Retrieval rather than recall. The model supplies the
+     reasoning and the phrasing; every fact it is allowed to state is in front
+     of it, which is what makes the verifier downstream enforceable.
+     ========================================================================== */
+
+  /* The FAQ entries closest to the question, whatever category they sit in.
+     `bestFaqIn` deliberately never crosses categories, because a retrieved
+     answer shown verbatim must be on topic. Grounding is the opposite case:
+     the model can tell a near miss from a hit, so breadth helps it. */
+  function nearestFaq(q, n) {
+    var scored = [];
+    FAQ.forEach(function (f) {
+      var hq = (f.q + ' ' + f.a).toLowerCase(), score = 0;
+      q.toLowerCase().split(/\W+/).forEach(function (w) {
+        if (w.length < 4) return;
+        var s = w.length > 5 ? w.slice(0, 5) : w;
+        if (hq.indexOf(s) !== -1) score += s.length;
+      });
+      if (score) scored.push({ f: f, s: score });
+    });
+    scored.sort(function (a, b) { return b.s - a.s; });
+    return scored.slice(0, n || 4).map(function (x) { return x.f; });
+  }
+
+  var LOCK_BRIEF = {
+    soft:
+      'STATUS: Roam has an approved answer to this question, shown below.\n' +
+      'Write the reply yourself using it. Answer the question they actually asked, in their words and their language, ' +
+      'rather than reciting the approved answer as a block. You may leave out parts of it that do not apply. ' +
+      'You may not add a figure, place, partner or claim that is not in it or in your standing instructions.',
+    open:
+      'STATUS: no pre-written answer covers this question.\n' +
+      'This is exactly the case you are here for, so do not reach for the escalation first. ' +
+      'Work the question out from everything you have been given: reason across the facts, combine them, ' +
+      'do the arithmetic, compare options, and explain trade-offs. Related material is listed below to start you off. ' +
+      'Escalate only if answering would need a number, a place or a policy nobody has given you.',
+    escalate:
+      'STATUS: Roam has NOT approved a figure for this question, so you do not have one.\n' +
+      'You must not state, estimate, approximate or bracket the missing figure, and you must not reason your way ' +
+      'to it from other numbers. Say plainly that you would rather have the team confirm it than guess, ' +
+      'give the approved information that sits next to it, and route them to a person. ' +
+      'A warm, useful reply that stops short of the number is the whole job here.'
+  };
+
+  /* What this particular intent is, and what it is not. The second half is the
+     one that earns its place: every intent error Roam reported was a drift
+     into an adjacent subject that shared a keyword. */
+  var INTENT_BRIEF = {
+    parts:
+      'INTENT: spare parts. This is about the Roam Parts catalogue and the Roam Cart. ' +
+      'It is NOT about buying a motorcycle. Do not mention the Roam Air purchase, the KES 15,000 ' +
+      'deposit, test rides or motorcycle financing.',
+    battery_price:
+      'INTENT: the price of a battery on its own. It is NOT the price of a complete motorcycle. ' +
+      'Do not quote KES 296,000 or KES 430,000 here.',
+    pricing:
+      'INTENT: the price of the complete Roam Air. If they meant a battery on its own, that is a ' +
+      'different figure.',
+    buy:
+      'INTENT: buying a complete motorcycle. If the customer was asking about a part or a battery, ' +
+      'this is the wrong subject and you should say so rather than pitch a bike.',
+    country:
+      'INTENT: whether Roam operates in a country. Answer the availability question. Do not search ' +
+      'for or suggest a Kenyan hub as though it answered it.',
+    hub_location:
+      'INTENT: a place. The widget has already resolved it against the location database and is ' +
+      'showing the cards. Do not restate distances, do not name a station as nearest, and do not ' +
+      'add a location that is not on the list.',
+    privacy:
+      'INTENT: a request about the customer\'s own personal data. You do not hold their records ' +
+      'and cannot change or delete them. Route them to the Roam team and promise nothing.',
+    charging_where:
+      'INTENT: where to charge. A location question, not a sales question.',
+    service:
+      'INTENT: servicing and maintenance. If they named a place, it is a location question too.'
+  };
+
+  function groundingFor(text, local) {
+    var q = normalise(text);
+    var parts = [
+      '=== GROUNDING FOR THIS QUESTION ===',
+      'The customer wrote: ' + text,
+      q !== text.toLowerCase() ? 'Read as: ' + q : '',
+      'Classified subject: ' + (local.cat && local.cat !== 'unknown' ? local.cat : 'not classified'),
+      /* The classifier has already done the work of deciding what this
+         question is about. Telling the model what NOT to drift into is worth
+         more than telling it the category name, because drift is the failure:
+         a parts question answered with a motorcycle pitch, a battery price
+         answered with the bike price. */
+      INTENT_BRIEF[local.cat] || '',
+      '',
+      LOCK_BRIEF[local.lock] || LOCK_BRIEF.open,
+      ''
+    ];
+
+    if (local.lock === 'soft') {
+      parts.push("ROAM'S APPROVED ANSWER:", local.text, '');
+    }
+
+    var near = nearestFaq(q, local.lock === 'open' ? 5 : 3);
+    if (near.length) {
+      parts.push('RELATED APPROVED MATERIAL:');
+      near.forEach(function (f) { parts.push('Q: ' + f.q + '\nA: ' + f.a); });
+      parts.push('');
+    }
+
+    /* The widget owns locations and parts outright. Saying so stops the model
+       reaching for a half-remembered hub when the right move is to hand the
+       question back to the panel that can actually answer it. */
+    parts.push(
+      'HANDLED BY THE WIDGET, NOT BY YOU: hub and shop locations, station services and phone ' +
+      'numbers, the parts catalogue, the Roam Cart and draft quotes, and the savings calculator. ' +
+      'If the question is really one of those, say one short line and let the panel do the work.',
+      '=== END GROUNDING ==='
+    );
+
+    return parts.filter(function (s) { return s !== ''; }).join('\n');
+  }
+
+  /* ==========================================================================
+     VERIFICATION
+
+     The guardrails used to work by never letting the model speak. Opening the
+     model up means the guardrails have to move to the other end: instead of
+     deciding in advance which questions are safe to ask, check the answer that
+     comes back and refuse to render it if it says something Roam has not
+     approved. A rejected reply is not shown and is not retried; the built-in
+     answer takes its place, so the worst case is exactly the old behaviour.
+
+     This is the piece that makes 'guarded' mode defensible. Without it,
+     widening the model's remit would just be trading shallowness for the risk
+     of a made-up price on a sales site, which is the expensive failure.
+     ========================================================================== */
+
+  /* Every money figure Roam has actually approved. Built from the same data
+     the widget renders, so it can never drift from what the tables show. */
+  var APPROVED_FIGURES = (function () {
+    var set = {};
+    function add(v) {
+      if (v === null || v === undefined || v === '') return;
+      var n = parseFloat(String(v).replace(/,/g, ''));
+      if (!isNaN(n)) set[n] = 1;
+    }
+    Object.keys(FINANCING_DATA).forEach(function (k) {
+      FINANCING_DATA[k].forEach(function (row) {
+        add(row.down); add(row.p12); add(row.p18); add(row.p24);
+      });
+    });
+    add(CASH.single); add(CASH.dual);
+    add(BATTERY_PRICE.cash); add(BATTERY_PRICE.deposit);
+    /* Parts prices are deliberately NOT in here. The catalogue holds hundreds
+       of figures, and folding them in would quietly bless almost any number a
+       model could produce: a daily repayment of "KES 1,199" passes the moment
+       some bracket in the catalogue happens to cost that. Parts questions are
+       hard-locked and answered from the catalogue itself, so the model never
+       needs a parts price and must not be handed a licence to state one. */
+    // Charging, savings, servicing and the other figures the prompt approves.
+    [1, 20, 25, 40, 80, 160, 100, 300, 1000, 213, 533, 577, 580, 500, 897,
+     7200, 8400, 24000, 100000, 15000, 5000, 20000, 97, 40].forEach(add);
+    return set;
+  })();
+
+  /* Small rates that legitimately get multiplied out when the model does a
+     rider's sums for them, which the system prompt explicitly asks it to do. */
+  var CORE_RATES = [1, 7, 20, 25, 30, 40, 80, 160, 213, 365, 533, 577, 897];
+
+  /* The leading word boundary is load-bearing. Without it "takes 6.9 seconds"
+     and "makes 3 trips" read as money, which silently approves KES 6.9 and
+     KES 3 for every reply. */
+  var MONEY_RE = /\b(?:kes|ksh|kshs|shillings?|bob)\s*\.?\s*([\d,]+(?:\.\d+)?)|\b([\d,]+(?:\.\d+)?)\s*(?:kes|ksh|kshs|shillings?|bob)\b/gi;
+
+  function numbersIn(text) {
+    var out = [], m, re = /\b\d[\d,]*(?:\.\d+)?\b/g;
+    while ((m = re.exec(text)) !== null) {
+      var n = parseFloat(m[0].replace(/,/g, ''));
+      if (!isNaN(n)) out.push(n);
+    }
+    return out;
+  }
+
+  /* Only the figures the grounding presents AS MONEY count as approved money.
+     Reading every number out of the grounding instead would quietly approve
+     "KES 3 per kilometre" on the strength of "3 to 4 hours" appearing in an
+     unrelated sentence, which is precisely the kind of near miss this check
+     exists to catch. */
+  function moneyIn(text) {
+    var out = [], m;
+    MONEY_RE.lastIndex = 0;
+    while ((m = MONEY_RE.exec(text || '')) !== null) {
+      var n = parseFloat(String(m[1] || m[2]).replace(/,/g, ''));
+      if (!isNaN(n)) out.push(n);
+    }
+    return out;
+  }
+
+  /* Money figures the model may state.
+
+     The base is closed: what Roam approved, plus whatever money the grounding
+     put in front of it, plus whatever the customer said about their own
+     spending. Nothing else.
+
+     Arithmetic is opened only when the customer has actually given a number to
+     work with, and only in combination with that number. This matters because
+     "you spend 900 a day, so you keep about 740 a day, near 22,200 a month" is
+     the most persuasive thing the assistant does and every figure in it is
+     computed. It matters just as much that a bare "how much is it", with no
+     number to reason from, gets no arithmetic licence at all, because that is
+     the turn where a model is most likely to produce a confident wrong price
+     and where a wrong price costs Roam a sale. */
+  function allowedFigures(userText, grounding) {
+    var allowed = {};
+    function add(n) {
+      if (isNaN(n) || n < 0 || n > 1e9) return;
+      allowed[Math.round(n)] = 1;
+    }
+
+    Object.keys(APPROVED_FIGURES).forEach(function (k) { add(+k); });
+    moneyIn(grounding).forEach(add);
+
+    var theirs = numbersIn(userText).filter(function (n) { return n > 0; });
+    theirs.forEach(add);
+    if (!theirs.length) return allowed;
+
+    /* One step of arithmetic against the rates, then the standard
+       day-to-week, day-to-month and day-to-year multiples of the result. */
+    var derived = [];
+    theirs.forEach(function (u) {
+      CORE_RATES.forEach(function (c) {
+        [u * c, u + c, u - c, c - u].forEach(function (v) {
+          if (v > 0) { add(v); derived.push(v); }
+        });
+      });
+    });
+    derived.concat(theirs).forEach(function (v) {
+      add(v * 7); add(v * 30); add(v * 365);
+    });
+    return allowed;
+  }
+
+  /* Specifications carry a fixed approved value, so an inflated one is as
+     checkable as an invented price and just as damaging on a sales page.
+     Only units where Roam has committed to a number are listed. */
+  var SPEC_CHECKS = [
+    { unit: /\b(\d[\d,.]*)\s*km\/h\b/gi,          ok: [90, 60, 70, 80],              what: 'a top speed' },
+    { unit: /\b(\d[\d,.]*)\s*(?:nm)\b/gi,          ok: [55],                          what: 'a torque figure' },
+    { unit: /\b(\d[\d,.]*)\s*v\b(?!\w)/gi,         ok: [72],                          what: 'a system voltage' },
+    { unit: /\b(\d[\d,.]*)\s*w(?:atts?)?\b/gi,     ok: [3000],                        what: 'a motor rating' },
+    { unit: /\b(\d[\d,.]*)\s*kg\b/gi,              ok: [20, 129, 149, 250],           what: 'a weight' },
+    { unit: /\b(\d[\d,.]*)\s*%/g,                  ok: [20, 36, 40, 80, 97, 98, 100], what: 'a percentage' }
+  ];
+
+  /* Range gets its own check rather than a blanket rule on "km", because a
+     rider's own distance ("my route is 140 km") is a number the assistant is
+     supposed to repeat back, while the bike's range is fixed. Only a km figure
+     that is actually being presented as range is held to the approved values. */
+  var RANGE_SENTENCE = /\b(range|full charge|on (one|a single|two) batter|per charge)\b/i;
+  var APPROVED_RANGE = [80, 160, 113, 1, 100, 900, 1600, 6000];
+
+  function checkRange(text, theirs) {
+    var sentences = String(text).split(/(?<=[.!?\n])\s+/), i, m;
+    for (i = 0; i < sentences.length; i++) {
+      if (!RANGE_SENTENCE.test(sentences[i])) continue;
+      var re = /\b(\d[\d,.]*)\s*km\b(?!\/)/gi;
+      while ((m = re.exec(sentences[i])) !== null) {
+        var n = Math.round(parseFloat(String(m[1]).replace(/,/g, '')));
+        if (isNaN(n)) continue;
+        if (APPROVED_RANGE.indexOf(n) === -1 && theirs.indexOf(n) === -1) {
+          return 'states a range Roam has not approved: ' + m[0].trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  function checkSpecs(text) {
+    for (var i = 0; i < SPEC_CHECKS.length; i++) {
+      var c = SPEC_CHECKS[i], m;
+      c.unit.lastIndex = 0;
+      while ((m = c.unit.exec(text)) !== null) {
+        var n = parseFloat(String(m[1]).replace(/,/g, ''));
+        if (isNaN(n)) continue;
+        if (c.ok.indexOf(n) === -1) {
+          return 'states ' + c.what + ' Roam has not approved: ' + m[0].trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  /* Places Roam may be described as being present in. Taken from the same hub
+     table the location answers are built from. */
+  var APPROVED_PLACES = (function () {
+    var set = {};
+    function add(s) {
+      String(s).toLowerCase().split(/[^a-z']+/).forEach(function (w) {
+        if (w.length > 2) set[w] = 1;
+      });
+    }
+    HUBS.forEach(function (h) { add(h.s); add(h.pa || ''); });
+    ['nairobi', 'thika', 'machakos', 'kenya', 'kenyan', 'homabay', 'homa',
+     'africa', 'african', 'east', 'nakuru', 'malaba', 'mombasa', 'addis',
+     'stellenbosch', 'roam', 'park', 'point', 'hub', 'hubs', 'shop', 'centre',
+     'center', 'city', 'town', 'country'].forEach(function (w) { set[w] = 1; });
+    return set;
+  })();
+
+  var OTHER_COUNTRIES = /\b(uganda|tanzania|rwanda|burundi|ethiopia|somalia|south\s*sudan|nigeria|ghana|zambia|zimbabwe|malawi|mozambique|botswana|namibia|angola|senegal|ivory\s*coast|cameroon|egypt|morocco|india|pakistan|bangladesh|dubai|uae)\b/i;
+
+  var BANNED = [
+    { re: /\bmogo\b/i,            why: 'names Mogo, no longer a financing partner' },
+    { re: /\b4g\s*capital\b/i,    why: 'names 4G Capital, not a partner' },
+    { re: /\b(spiro|ampersand|bodawerk|ecobodaa|arc\s*ride|zeno|kiri\s*ev|tailg|fika\s*mobility|stima\s*boda)\b/i,
+                                  why: 'names a competitor' },
+    { re: /\broam\s+(move|rapid)\b[^.\n]{0,80}\b(\d|available|order|price|seat)/i,
+                                  why: 'quotes bus availability or specs while bus sales are on hold' },
+    { re: /\bfour\s+(riding|ride)\s+modes\b|\breverse\s+mode\b/i,
+                                  why: 'claims four riding modes; there are three' },
+    { re: /\b(fully\s+)?submersible\b/i,
+                                  why: 'claims the battery is submersible; it is IP67' },
+    { re: /\bin\s+stock\b|\bcurrently\s+available\s+for\s+immediate\b|\bi\s+(just\s+)?checked\b|\blet me check\b/i,
+                                  why: 'claims live stock or a lookup it cannot perform' },
+
+    /* Distance is the widget's to state, never the model's. It has the
+       coordinates and does the arithmetic; the model has neither and would be
+       guessing, which is how "the closest one is Wayaki Way, roughly 132 km
+       away" got said about a rider in Nakuru as though it were measured. */
+    { re: /\b\d[\d,.]*\s*(?:km|kilometre?s?|kilometers?)\s*(?:away|from|of|to)\b/i,
+                                  why: 'states a distance it cannot calculate' },
+    { re: /\b(closest|nearest)\b[^.\n]{0,60}\b\d[\d,.]*\s*(?:km|kilometre?s?|kilometers?)\b/i,
+                                  why: 'calls a station nearest and puts a distance on it' },
+
+    /* An absolute privacy promise is one the assistant cannot keep and Roam
+       then has to. The honest version is in PRIVACY_LINE. */
+    { re: /\b(100\s*%|completely|totally|entirely|fully|absolutely)\s+(safe|secure|private|confidential)\b/i,
+                                  why: 'makes an absolute privacy promise' },
+    { re: /\b(never|not)\s+be\s+(shared|sold|passed|given)\b|\bwe\s+(will\s+)?never\s+share\b|\bguarantee\s+your\s+(privacy|data|confidentiality)\b/i,
+                                  why: 'promises data will never be shared' },
+    { re: /\bwe\s+(delete|will\s+delete|have\s+deleted|removed)\s+(your|it|that)\b|\byour\s+(data|number|details)\s+(has|have)\s+been\s+(deleted|removed|erased)\b/i,
+                                  why: 'claims to have deleted customer data it cannot touch' },
+    { re: /\b(we\s+)?(keep|retain|store)\s+(your\s+)?(data|details|number|information)\s+for\s+\d+\s*(day|week|month|year)/i,
+                                  why: 'states a data-retention period Roam has not published' },
+
+    /* Availability is a market claim, not a database one, and the two get
+       confused precisely where a town has no listed hub. */
+    { re: /\broam\s+is\s+not\s+available\s+in\b/i,
+                                  why: 'claims Roam is unavailable somewhere, rather than unlisted' }
+  ];
+
+  /* Figures Roam has explicitly not approved. These are the ones a model is
+     most likely to supply from general knowledge of similar motorcycles. */
+  var WITHHELD = [
+    { re: /\d+\s*(\.\d+)?\s*kwh\b/i,                    why: 'states a battery capacity in kWh' },
+    { re: /\b\d[\d,]*\s*(charge\s*)?cycles\b/i,         why: 'states a charge cycle count' },
+    { re: /\b\d+\s*(%|percent)\s*(capacity|degrad|retention)/i, why: 'states battery degradation' },
+    { re: /\b(\d+\s*)?amp(ere)?s?\b\s*(input|ac)\b/i,   why: 'states a charger AC input rating' }
+  ];
+
+  function verifyReply(reply, local, userText, grounding) {
+    var text = String(reply || '').trim();
+    if (!text) return { ok: false, why: 'empty reply' };
+    if (text.length > 1600) return { ok: false, why: 'reply too long to be an answer' };
+
+    // The client asked for no em dash anywhere. Repair rather than reject.
+    text = text.replace(/\s*—\s*/g, ', ').replace(/,\s*,/g, ',');
+
+    var i, m;
+    for (i = 0; i < BANNED.length; i++) {
+      if (BANNED[i].re.test(text)) return { ok: false, why: BANNED[i].why };
+    }
+
+    /* A withheld figure is only a problem when the question was about it. The
+       kWh rule must not fire on a reply that is answering something else and
+       happens to mention the word. */
+    if (local.lock === 'escalate') {
+      for (i = 0; i < WITHHELD.length; i++) {
+        if (WITHHELD[i].re.test(text)) return { ok: false, why: WITHHELD[i].why };
+      }
+    }
+
+    /* A figure can be perfectly approved and still be the wrong answer. KES
+       296,000 and KES 430,000 are real Roam prices, so the money check waves
+       them through wherever they appear, and that is precisely how a battery
+       question comes back priced as a motorcycle. On a battery question they
+       are wrong by definition, whatever the whitelist says. */
+    if (local.cat === 'battery_price' &&
+        new RegExp('\\b(' + CASH.single.replace(',', ',?') + '|' +
+                   CASH.dual.replace(',', ',?') + ')\\b').test(text)) {
+      return { ok: false, why: 'answers a battery question with a motorcycle price' };
+    }
+
+    // Claiming presence in a country that is not Kenya.
+    if (OTHER_COUNTRIES.test(text) &&
+        /\b(available|sell|sells|selling|operate|operates|service|servicing|finance|financing|hub|shop|dealer|branch|launch)\b/i.test(text) &&
+        !/\bnot\b|\bno\b|\bonly\s+in\s+kenya\b|\bkenya\s+only\b|\byet\b/i.test(text)) {
+      return { ok: false, why: 'implies availability outside Kenya' };
+    }
+
+    /* A Roam presence attached to a place that is not in the location table.
+       Only fires when the sentence is actually claiming a presence, so an
+       ordinary mention of a town in passing is left alone. */
+    var placeRe = /\b(?:roam\s+)?(?:hub|shop|point|branch|dealer|outlet|store|service\s+cent(?:re|er))s?\b[^.\n]{0,40}?\b(?:in|at|near|on)\s+([A-Z][a-zA-Z']{2,}(?:\s+[A-Z][a-zA-Z']{2,})?)/g;
+    while ((m = placeRe.exec(text)) !== null) {
+      var claimed = m[1].toLowerCase().split(/\s+/);
+      for (i = 0; i < claimed.length; i++) {
+        if (!APPROVED_PLACES[claimed[i]]) {
+          return { ok: false, why: 'claims a Roam presence at "' + m[1] + '"' };
+        }
+      }
+    }
+
+    // Specifications, then money. Money is the expensive one.
+    var specProblem = checkSpecs(text) ||
+                      checkRange(text, numbersIn(userText).map(Math.round));
+    if (specProblem) return { ok: false, why: specProblem };
+
+    var allowed = allowedFigures(userText, grounding);
+    MONEY_RE.lastIndex = 0;
+    while ((m = MONEY_RE.exec(text)) !== null) {
+      var raw = m[1] || m[2];
+      var n = Math.round(parseFloat(raw.replace(/,/g, '')));
+      if (isNaN(n)) continue;
+      if (!allowed[n] && !allowed[n - 1] && !allowed[n + 1]) {
+        return { ok: false, why: 'states an unapproved figure: KES ' + raw };
+      }
+    }
+
+    return { ok: true, text: text };
   }
 
   /* Money questions. These get the calculator button alongside the answer. */
@@ -3787,7 +4740,7 @@
       if (reply.unresolved) {
         row(quickActions(text), 'bot');   // never leave the visitor at a dead end
       } else {
-        maybeOfferLead(text);
+        maybeOfferLead(text, cat);
       }
       busy = false;
       $('rai-send').disabled = false;
@@ -3802,27 +4755,74 @@
       after(typingPause(body), function () { dots.remove(); done(); });
     }
 
-    /* Guardrailed answers are final. No model is asked, so no model can turn
-       an unknown location, country, price or spec into an invented answer.
-       With no model configured at all, the local answer is likewise the whole
-       answer, and there is nothing to wait for beyond the typing beat. */
-    if (local.forced || !API_ENDPOINT) {
+    /* Hard-locked answers are final. A hub, a shop, a country, a part, a price
+       or a live panel action is a database lookup, and no model is asked, so
+       none can turn one into an invention. Everything else is a question that
+       deserves a written answer, and that is the model's job.
+
+       In 'strict' mode the old rule applies instead: the model only sees what
+       the built-in knowledge already answered. Kept as the one-line rollback
+       if a live model ever misbehaves. */
+    var modelMayAnswer =
+      API_ENDPOINT && AI_MODE !== 'off' &&
+      (AI_MODE === 'strict' ? !local.forced : local.lock !== 'hard');
+
+    if (!modelMayAnswer) {
       history_.push({ role: 'user', content: text });
       history_.push({ role: 'assistant', content: local.text });
       typeThen(local.text, function () { finish(local); });
       return;
     }
 
+    var grounding = groundingFor(text, local);
     var typing = row('<div class="rai-typing"><i></i><i></i><i></i></div>', 'bot');
 
-    askBackend(text).catch(function () {
-      // offline path still records the reply, so the lead transcript is complete
+    askBackend(text, local, grounding).catch(function () {
+      /* Unreachable, or the reply failed verification. Either way the visitor
+         gets the built-in answer, which is exactly what they would have got
+         before any of this existed. The offline path still records the reply
+         so the lead transcript stays complete. */
       history_.push({ role: 'assistant', content: local.text });
       return local;
     }).then(function (reply) {
       typing.remove();
-      finish(reply);
+      finish(mergeReply(local, reply));
     });
+  }
+
+  /* The model writes the words. Everything else about the answer, which card
+     may appear, which panel opens, whether the calculator button follows,
+     whether this counts as a dead end, is still decided by the classifier,
+     because that is what keeps a reply from being illustrated with something
+     unrelated. Losing this merge is how an AI-answered question would quietly
+     stop showing the financing table or the test-ride button. */
+  function mergeReply(local, reply) {
+    if (!reply || !reply.fromAI) return reply || local;
+
+    var merged = {
+      text:       reply.text,
+      cat:        local.cat,
+      lock:       local.lock,
+      fromAI:     true,
+      forced:     false,
+      ui:         local.ui,
+      part:       local.part,
+      items:      local.items,
+      hubs:       local.hubs,
+      full:       local.full,
+      unresolved: false
+    };
+
+    /* An escalation is still an escalation however warmly it is worded, so the
+       one-tap routes to a person stay. And if the model chose to escalate on
+       an open question, honour that rather than treating it as answered. */
+    var modelEscalated =
+      /(don'?t|do not|cannot|can'?t)\s+(have|confirm|find)|\bwill confirm\b|\bteam (will|can) (confirm|check)\b/i
+        .test(reply.text) && reply.text.indexOf(PHONE) !== -1;
+
+    if (local.lock === 'escalate' || modelEscalated) merged.unresolved = true;
+
+    return merged;
   }
 
   /* ==========================================================================
