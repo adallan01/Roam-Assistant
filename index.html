@@ -89,6 +89,10 @@
   var LEADS_SECRET   = CFG.leadsSecret   || '';   // must match SHARED_SECRET in the Apps Script
   var WHATSAPP       = CFG.whatsapp      || '254740666555';
   var PHONE          = '+254 740 666 555';
+  /* Roam's rider onboarding video. Every training and "how do I use it"
+     question routes here rather than to a written summary the assistant
+     would have to keep in step with the video. */
+  var ONBOARDING_VIDEO = CFG.onboardingVideo || 'https://youtu.be/zT_UEUIoxpQ';
   /* Roam's official privacy notice. Left empty until Roam's legal owner has
      approved the page and its URL: an assistant linking to a notice that does
      not exist yet is worse than one that links to none. Set it in
@@ -269,7 +273,7 @@
      category the question was classified into, so a question about one topic
      can never be answered with a fact from another. */
   var FAQ = [
-    { c:'home_charging',   q: 'Can I charge at home?',            a: "Yes. The Roam Air's removable battery plugs into any standard home outlet using the included portable charger, just like charging a phone." },
+    { c:'home_charging',   q: 'Can I charge at home?',            a: "Yes. The Roam Air's removable battery plugs into any standard wall outlet using the included portable charger, so no special home installation is needed. Charge overnight and it is ready the next day. You do not need a public charging point for everyday charging. Keep the charger, plug and connections away from water and charge in a dry place." },
     { c:'charging_where',  q: 'Where can I charge?',              a: 'At home with the portable charger, at a 24/7 self-service Roam Point, or at a full-service Roam Hub. Roam Hubs are located across Nairobi.' },
     { c:'charging_cost',   q: 'How much does charging cost?',     a: 'About KES 1 per kilometre at home. That is roughly KES 80 to fill one battery for about 80 km, or KES 160 for two batteries and a full 160 km day. Your exact cost depends on your electricity tariff and how you ride.' },
     { c:'charging_cost',   q: 'What does a Roam Point cost?',     a: 'Fast charging at a Roam Point is charged per unit of electricity: KSh 40 per kWh during the day and a discounted KSh 25 per kWh off-peak and overnight. Battery rental at a Roam Hub is KES 20 an hour.' },
@@ -286,9 +290,9 @@
     { c:'savings',         q: 'How much can I save?',             a: 'At 160 km/day most riders save around KES 577 a day versus a petrol motorcycle and KES 213 a day versus a battery-swapping motorcycle, over KES 100,000 a year.' },
     { c:'pricing',         q: "What's the cash price?",           a: 'KES 296,000 for a single battery plus one charger, or KES 430,000 for dual batteries plus two chargers.' },
     { c:'manufacturing',   q: 'Where are Roam vehicles made?',    a: 'Designed, engineered and assembled in Kenya at Roam Park, a 10,000 sqm facility in Nairobi with eventual capacity for 50,000 motorcycles a year.' },
-    { c:'warranty',        q: "What's the warranty?",             a: 'Roam Air carries a 2-year commercial warranty, and the Gen 3 battery is guaranteed for 100,000 km.' },
+    { c:'warranty',        q: "What's the warranty?",             a: 'Roam Air carries a 2-year commercial warranty, and the battery performance warranty is up to 100,000 km. For a claim, call Roam on ' + PHONE + ' and arrange for the motorcycle to be assessed through an authorised Roam dealer or service centre.' },
     { c:'test_ride',       q: 'Can I book a test ride?',          a: 'Yes, free and with no commitment. Use the booking button above to pick a date, or call ' + PHONE + ', Mon–Fri 9am–5pm.' },
-    { c:'b2b',             q: 'Do you offer fleet deals?',        a: 'Yes, for operators running multiple bikes, with Roam Explorer fleet monitoring included. Contact sales@roam-electric.com.' },
+    { c:'b2b',             q: 'Do you offer fleet deals?',        a: 'Yes. Roam offers discounts on purchases of more than 5 motorcycles, with Roam Explorer fleet monitoring included. Tell me your fleet size, or contact sales@roam-electric.com.' },
     { c:'theft',           q: 'What if my battery is stolen?',    a: 'Every battery is GPS-tracked in real time through the Roam App, with live health monitoring and anti-theft alerts. Report a theft to the team on ' + PHONE + ' straight away.' },
     { c:'performance',     q: 'How powerful is it?',              a: 'A 3,000W mid-drive motor producing 55 Nm of torque, with three riding modes: Eco, Standard and Power. Top speed is 90 km/h and 0 to 60 km/h takes 6.9 seconds.' }
   ];
@@ -495,9 +499,16 @@
     '• Dashboard: motor fault means do not keep riding; throttle fault means stop safely and get service help; the spanner means a powertrain maintenance issue. Battery bar, charge indicator, power meter, beam and turn indicators are status only.',
     '• Roam Hub battery rental is KES 20 an hour, maximum 48 hours, return it so other riders can use it.',
     '• Service centre: Roam Nairobi Ride-In Ride-Out Service Centre on Lusaka Road. Support hours 8:30am to 5:00pm.',
+    '• Opening hours are confirmed per Hub and held in the location data. Never state hours for a Hub from your own knowledge; the widget answers hours itself.',
+    '• WARRANTY WORDING, APPROVED: the battery performance warranty is UP TO 100,000 KM. Never call it a 2-year warranty and never use the older 12-month or 800-cycle wording. The 2-year commercial warranty belongs to the motorcycle. For a claim: call Roam and arrange assessment through an authorised Roam dealer or service centre.',
+    '• FINANCING DOCUMENTS, APPROVED: financing comes from Roam\u2019s partner financiers, not from Roam; Roam supplies the motorcycle. Financiers generally ask for a Kenyan National ID or passport, a KRA PIN certificate, a valid stamped A2 driving licence, 6 months of M-Pesa statements, a down payment and proof of active income. Age limits are set per financier: say they exist and differ, never quote a range. Whether a rider will be APPROVED is still the financier\u2019s call and must not be predicted.',
+    '• TRAINING AND ONBOARDING: route to Roam\u2019s onboarding video at ' + ONBOARDING_VIDEO + '. Do not write your own step-by-step riding or maintenance procedure.',
+    '• HOME CHARGING, APPROVED: Roam Air charges from a standard wall socket with the supplied portable charger. No special home installation is needed. Overnight charging is normal. Roam Hubs and Roam Points are an additional option, not the only way to charge.',
+    '• AFTER-SALES COVERAGE: a rider can buy anywhere in Kenya and charge at home. After-sales service is only at the Roam locations listed in the location data. Never say Roam Hubs are Nairobi-only; several are outside Nairobi.',
+    '• FLEET: Roam offers discounts on purchases of more than 5 motorcycles. The discount itself is not approved, so never state a percentage or an amount.',
     'SAFETY-FIRST ESCALATION: any fault involving brakes, throttle, motor, battery, overheating or electrical systems means tell them to stop safely and contact Roam. Never improvise a troubleshooting procedure.',
     '',
-    'NOT YET APPROVED, so never answer these from your own knowledge. Say the team will confirm the exact figure, and offer WhatsApp, phone or a call back: exact battery capacity in kWh, units of electricity per full charge, charger AC input rating, number of charging cycles, battery degradation behaviour, what happens after 100,000 km, replacement battery price, routine servicing price, service intervals, detailed warranty terms and exclusions, financing eligibility requirements, early settlement, additional fees, exact insurance and health cover included by each financier, exact Canopy and Explorer feature lists, theft-alert specifics, offline and SMS behaviour, and data privacy terms.',
+    'NOT YET APPROVED, so never answer these from your own knowledge. Say the team will confirm the exact figure, and offer WhatsApp, phone or a call back: exact battery capacity in kWh, units of electricity per full charge, charger AC input rating, number of charging cycles, battery degradation behaviour, what happens after 100,000 km, replacement battery price, routine servicing price, service intervals, detailed warranty terms and exclusions, early settlement, additional fees, exact insurance and health cover included by each financier, exact Canopy and Explorer feature lists, theft-alert specifics, offline and SMS behaviour, and data privacy terms.',
     '',
     'RULES ON NEVER DEAD-ENDING (IMPORTANT): You must never end a reply with only "I do not know" or "I do not have that information." That is useless to someone trying to buy. Whenever you cannot answer fully:',
     '1. Say briefly that you want to get it exactly right rather than guess.',
@@ -542,63 +553,82 @@
        ch  charging   re  battery rental   as  after-sales
        sh  shop       co  container (internal, not volunteered to riders)
        ld  launch date, '' if none      rg  nairobi | outside
+       hr  opening hours, '' if not confirmed by Roam operations
        k   everyday wording, including the spellings riders actually use
        kx  the more specific wording, when two stations share a town name
      ========================================================================== */
   var HUBS = [
     { s:'Outering',                 pa:'TotalEnergies',   ph:'+254 723 655 007',
       lat:-1.26955,  lng:36.88024,  ch:1, re:1, as:1, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'16 January 2025',  rg:'nairobi',  k:/\bout ?ering\b|\bouterring\b/ },
     { s:'Wayaki Way',               pa:'TotalEnergies',   ph:'+254 727 204 078',
       lat:-1.25861,  lng:36.781386, ch:1, re:1, as:1, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'1 May 2023',       rg:'nairobi',  k:/\bwa[iy]{0,2}aki\b/ },
     { s:'Kayole',                   pa:'Sahara Energy',   ph:'+254 721 461 560',
       lat:-1.28173,  lng:36.9052,   ch:1, re:1, as:1, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'1 May 2024',       rg:'nairobi',  k:/\bkayole\b/ },
     { s:'Lusaka Road',              pa:'TotalEnergies',   ph:'+254 724 051 752',
       lat:-1.301257, lng:36.833013, ch:1, re:1, as:1, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'1 March 2023',     rg:'nairobi',  k:/\blusaka\b/ },
     { s:'Roysambu',                 pa:'Quickmart',       ph:'+254 700 838 383',
       lat:-1.21521,  lng:36.89175,  ch:1, re:1, as:0, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'1 December 2023',  rg:'nairobi',  k:/\broysambu\b|\broysabu\b|\brosysambu\b/ },
     { s:'Sabaki',                   pa:'TotalEnergies',   ph:'+254 114 930 589',
       lat:-1.41952,  lng:36.95438,  ch:1, re:1, as:0, sh:0, co:1,
+      hr:'',
       ld:'10 August 2024',   rg:'outside',  k:/\bsabaki\b/ },
     { s:'Forest Road',              pa:'Shell',           ph:'+254 722 528 051',
       lat:-1.26773,  lng:36.83114,  ch:1, re:1, as:0, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'1 September 2024', rg:'nairobi',  k:/\bforest ?road\b|\bforest\b/ },
     { s:'Karambee',                 pa:'TotalEnergies',   ph:'+254 117 473 213',
       lat:-1.26673,  lng:36.84522,  ch:1, re:1, as:0, sh:0, co:1,
+      hr:'',
       ld:'3 January 2025',   rg:'nairobi',  k:/\bkarambee?\b|\bkarambe\b/ },
     { s:'Machakos Town',            pa:'Stanchard',       ph:'',
       lat:-1.51997,  lng:37.26909,  ch:1, re:1, as:0, sh:0, co:1,
+      hr:'',
       ld:'',                 rg:'outside',  k:/\bmachakos\b/, kx:/\bmachakos town\b/ },
     { s:'Ojijo',                    pa:'Rubis',           ph:'',
       lat:-1.2671,   lng:36.81175,  ch:1, re:1, as:0, sh:0, co:1,
+      hr:'Open 24 hours',
       ld:'15 November 2025', rg:'nairobi',  k:/\bojijo\b/ },
     { s:'Roam Park',                pa:'Roam',            ph:'',
       lat:-1.33688,  lng:36.8646,   ch:0, re:0, as:0, sh:0, co:1,
+      hr:'',
       ld:'17 February 2025', rg:'nairobi',  k:/\broam park\b/ },
     { s:'Suguta',                   pa:'Roam',            ph:'+254 724 148 162',
       lat:-1.28777,  lng:36.77884,  ch:1, re:1, as:0, sh:1, co:0,
+      hr:'Open 24 hours',
       ld:'28 November 2024', rg:'nairobi',  k:/\bsuguta\b/ },
     { s:'Thika Centre',             pa:'Roam',            ph:'+254 704 269 168',
       lat:-1.03381,  lng:37.07543,  ch:1, re:1, as:1, sh:1, co:0,
+      hr:'',
       ld:'8 November 2024',  rg:'outside',  k:/\bthika\b/, kx:/\bthika cent(re|er)\b/ },
     { s:'Machakos Centre',          pa:'TotalEnergies',   ph:'+254 116 879 836',
       lat:-1.52782,  lng:37.20929,  ch:1, re:1, as:1, sh:1, co:0,
+      hr:'',
       ld:'30 April 2025',    rg:'outside',  k:/\bmachakos\b/, kx:/\bmachakos cent(re|er)\b/ },
     { s:'Nairobi Regional Office',  pa:'Roam',            ph:'',
       lat:-1.30187,  lng:36.8332,   ch:1, re:1, as:1, sh:1, co:0,
+      hr:'',
       ld:'15 July 2025',     rg:'nairobi',  k:/\b(nairobi|narobi) regional\b|\bregional office\b/ },
     { s:"Adam's Minimall",          pa:"Adam's Minimall", ph:'',
       lat:-1.30085,  lng:36.77946,  ch:1, re:1, as:1, sh:1, co:0,
+      hr:'',
       ld:'11 August 2025',   rg:'nairobi',  k:/\badams?'?s?\b|\bmini ?mall\b/ },
     { s:'Langata',                  pa:'Roam',            ph:'',
       lat:-1.34207,  lng:36.7639,   ch:1, re:1, as:0, sh:1, co:0,
+      hr:'7:00am to 5:00pm',
       ld:'4 January 2026',   rg:'nairobi',  k:/\blang'?ata\b/ },
     { s:'Wetu Hub Homabay',         pa:'Wetu',            ph:'',
       lat:-0.54971,  lng:34.45358,  ch:0, re:0, as:1, sh:1, co:0,
+      hr:'',
       ld:'',                 rg:'outside',  k:/\bhoma ?bay\b|\bwetu\b/ }
   ];
 
@@ -1018,9 +1048,15 @@
     pricing:
       "I don't have a confirmed current price for that configuration.\n" +
       'Please contact Roam on ' + PHONE + ' for the latest price.',
+    /* Whether a rider will be approved is the financier's call, not Roam's, so
+       that part stays withheld. What they must bring is published, so the
+       escalation carries it: a dead end that still moves the rider forward. */
     financing:
-      "Financing depends on the financier and package, and I don't have enough verified information to confirm that specific option.\n" +
-      'Please contact Roam on ' + PHONE + '.',
+      'Approval is the financier\u2019s decision, not Roam\u2019s, so I cannot tell you whether you will qualify.\n' +
+      'What they generally ask for is your National ID or passport, your KRA PIN certificate, ' +
+      'a valid stamped A2 driving licence, your last 6 months of M-Pesa statements, ' +
+      'a down payment and proof of active income.\n' +
+      'Call Roam on ' + PHONE + ' and the team will point you to the right financier.',
     technical:
       "I don't have a verified answer to that technical question in my current knowledge base.\n" +
       'Please contact the Roam team on ' + PHONE + ' for confirmation.',
@@ -1030,9 +1066,11 @@
     colour:
       "I don't have confirmed current colour options in my knowledge base.\n" +
       'Please contact Roam on ' + PHONE + ' and we will confirm the available colours.',
+    /* Reached only if an hours question slips past hoursAnswer(). Hub hours
+       themselves are confirmed data now and live on the hub rows. */
     hours:
-      "I don't have confirmed opening hours for our shops in my current information.\n" +
-      'The sales line is open Mon–Fri, 9am–5pm. Call ' + PHONE + ' and we will confirm shop hours for you.',
+      "I don't have confirmed opening hours for that location in my current information.\n" +
+      'The sales line is open Mon–Fri, 9am–5pm. Call ' + PHONE + ' and we will confirm them for you.',
     account:
       'That one needs a person, because it depends on your own account and paperwork.\n' +
       'Please contact Roam on ' + PHONE + ' and the team will check it for you.',
@@ -1077,7 +1115,11 @@
       '• It plugs into a standard wall outlet\n' +
       '• The battery lifts out so you can carry it indoors\n' +
       '• About 3 to 4 hours for a full battery\n' +
-      'Want to know what that costs?' },
+      '• Charge overnight and it is ready for the next day\n' +
+      'You do not need a public charging point for everyday charging. Roam Hubs and ' +
+      'Roam Points are an extra option, not the only way to charge.\n' +
+      'Keep the charger, plug and connections away from water, charge in a dry place, ' +
+      'and follow the instructions in your Roam Air User Manual.' },
 
     { c:'charging_time', a:
       'Charging times for the Roam Air Gen 3:\n' +
@@ -1157,13 +1199,19 @@
       '• No oil changes and no spark plugs, there is no petrol engine\n' +
       '• You still service tyres, brakes, chain, suspension and electrics\n' +
       '• Genuine parts and diagnostics at any Roam Hub\n' +
-      'For service pricing and intervals, call ' + PHONE + '.' },
+      'To book a service or repair, call Roam on ' + PHONE + '. ' +
+      'For service pricing and intervals the team will confirm those with you.' },
 
+    /* Approved September 2026. The battery is described by distance, never by a
+       number of years: "2-year" belongs to the motorcycle warranty and saying
+       it about the battery is the exact recombination this wording prevents.
+       A verifier rule enforces the same thing on model output. */
     { c:'warranty', a:
       'Roam Air carries a 2-year commercial warranty.\n' +
-      '• The Gen 3 battery is guaranteed for 100,000 km\n' +
-      '• For what a specific warranty covers in your case, the team will confirm\n' +
-      'Call ' + PHONE + ' and they will check it for you.' },
+      '• The battery performance warranty is up to 100,000 km\n' +
+      '• For what your own warranty covers, the team will confirm it with you\n' +
+      'Need help with a warranty claim? Call Roam on ' + PHONE + ' and arrange for the ' +
+      'motorcycle to be assessed through an authorised Roam dealer or service centre.' },
 
     { c:'solar', a:
       'Yes, a Roam Air can run on solar.\n' +
@@ -1181,10 +1229,11 @@
 
     { c:'b2b', a:
       'Yes, we work with fleets.\n' +
-      '• Fleet pricing for operators running multiple bikes\n' +
+      '• Discounts on purchases of more than 5 motorcycles\n' +
       '• Roam Canopy and Roam Explorer for monitoring and management\n' +
       '• Partners include Bolt, Keep It Cool and Greenspoon\n' +
-      'Email sales@roam-electric.com or tell me your fleet size.' },
+      'Tell me your fleet size and a Roam representative will put pricing together, ' +
+      'or email sales@roam-electric.com.' },
 
     { c:'locations', a:
       'Roam locations run from Homabay to Machakos, with most of them across Nairobi.\n' +
@@ -1195,10 +1244,11 @@
 
     { c:'upcountry', a:
       'Yes, riders use Roam Air upcountry every day.\n' +
-      '• The portable charger works on any standard outlet, anywhere\n' +
+      '• You can buy anywhere in Kenya and charge at home on the portable charger\n' +
+      '• You do not need to live near a Roam Hub to own one\n' +
       '• A rider crossed Kenya border to border on charging alone\n' +
-      '• Roam Hubs are currently Nairobi-based\n' +
-      'Tell me your town and a rep will confirm what is nearest to you.' },
+      '• After-sales service is at the Roam locations listed in the Hub finder\n' +
+      'Tell me your town and I will find the closest listed Roam Hub.' },
 
     { c:'test_ride', a:
       'Test rides are free, with no commitment.\n' +
@@ -1226,6 +1276,31 @@
       '• Eventual capacity for 50,000 motorcycles a year\n' +
       '• Over 7,000 motorcycles built to date\n' +
       'Want to see how it is made?' },
+
+/* Approved September 2026. The framing is load-bearing and must lead: these
+       are the financiers' requirements, not Roam's. Roam supplies the asset,
+       not the financing, and a rider who thinks Roam is refusing them is a
+       rider Roam has lost for the wrong reason.
+       Deliberately absent: an age band. Limits are set per financier and differ
+       between them, and a flat range published on Roam's own site makes riders
+       disqualify themselves from a bike Roam would happily sell them. */
+    { c:'financing_docs', a:
+      'Financing is provided by Roam\u2019s partner financiers, not by Roam. Roam supplies the motorcycle.\n' +
+      'Each financier sets its own criteria, but they generally ask for:\n' +
+      '• Original Kenyan National ID, or a valid passport\n' +
+      '• A copy of your KRA PIN certificate\n' +
+      '• A valid, stamped A2 driving licence, the class required for motorcycles\n' +
+      '• Your M-Pesa statement for the last 6 months\n' +
+      '• A down payment, which varies by financier and package\n' +
+      '• Proof of active income\n' +
+      'Age limits are set by each financier and differ between them, so yours will confirm what applies to you.\n' +
+      'Want to see the deposits and daily rates for each financier?' },
+
+    { c:'training', a:
+      'Yes. Roam has an onboarding video that walks you through running and looking after your Roam Air.\n' +
+      '• Watch it here: ' + ONBOARDING_VIDEO + '\n' +
+      '• It covers day-to-day use, charging and basic care\n' +
+      'Anything it does not answer, call Roam on ' + PHONE + ' and the team will take you through it.' },
 
     { c:'legal', a:
       'Registration and insurance work exactly as with a petrol motorcycle.\n' +
@@ -1378,6 +1453,11 @@
     { c:'colour',        m:/colou?rs?\b|(have|get|come in|available in|any)[\s\S]{0,14}\b(red|black|white|blue|orange|silver|grey|gray|yellow)\b/ },
     { c:'test_ride',     m:/test ?ride|book.{0,15}ride|demo ride|try (it|the bike|one|a roam|the roam)\b|ride one\b|take it for a ride|for a ride\b|ride it first|test the bike|try the roam/ },
     { c:'buses',         m:/\bbus(es)?\b|matatu|shuttle|roam rapid|roam move|coach/ },
+    /* Deliberately narrow. "My wife wants to learn to ride, is it easy?" is a
+       rider asking for reassurance, and a warm model answer serves them far
+       better than a link. This intent claims only an explicit request for
+       Roam's own training, onboarding or manual. */
+    { c:'training',      m:/\btraining\b|\btrain (me|riders|us|new riders)\b|\bonboard(ing)?\b|\borientation\b|\buser manual\b|\btutorial\b|\bhow (do|to) i (use|operate) (it|the|my)\b|\bteach (me|riders|us) how to (use|operate|ride)\b/ },
     { c:'careers',       m:/career|\bjob\b|hiring|vacanc|work (at|for) roam|internship|apply for a (job|role)/ },
 
     // Business enquiries outrank consumer purchase wording
@@ -1401,6 +1481,11 @@
 
     // Purchase family, most specific first
     { c:'sales_location',m:/\bwhere\b[\s\S]{0,30}\b(buy|get|purchase|order|acquire)\b|\b(buy|get|purchase|order|acquire)\b[\s\S]{0,30}\bwhere\b|where (can|do) i (buy|get)|which shop.{0,20}(buy|get)|find a roam (air|bike|motorcycle)/ },
+    /* What a rider must BRING is a different question from whether they will
+       be APPROVED. Roam can answer the first from the financiers' published
+       requirements; the second stays with the financier. This intent claims
+       the first so it is not swallowed by the general financing answer. */
+    { c:'financing_docs',m:/\b(kra|pin certificate|m.?pesa statement|bank statement|pay ?slip|guarantor)\b|(financ\w*|loan|credit|hire purchase|m.?kopa|watu|rafiki|platinum|fortune)[\s\S]{0,40}\b(document\w*|paperwork|requirement\w*|qualif\w*|eligib\w*|bring|apply)\b|\b(document\w*|paperwork|requirement\w*)\b[\s\S]{0,40}\b(financ\w*|loan|credit|hire purchase|apply|applying)\b|what (do|will) i need to (bring|apply)|\bwhat do i bring\b/ },
     { c:'financing',     m:/financ|loan|deposit|instal(l)?ment|hire purchase|repay|pay.{0,10}(month|daily|day)|m.?kopa|watu|rafiki|platinum credit|fortune credit|credit\b|afford|own the bike|how much[\s\S]{0,20}(to start|to begin|do i need|upfront|down)|get started|what do i need to (start|begin)/ },
     { c:'pricing',       m:/\bprice\b|pricing|cost of the bike|how much (is|for|does)[\s\S]{0,25}(bike|roam|motorcycle|it|cost)|cash price|buy it outright|\brrp\b|what does it cost|how much is it|\b(roam|roam air|bike|motorcycle)\s+how much/ },
     { c:'buy',           m:/\b(buy|buying|purchase|purchasing|order|acquire)\b|\bi want\b(?!\s+to (know|understand|ask|check|confirm|see if|hear))|\bcan i (get|have|own|take)\b|\bget one\b|\bhow (do|can) i (get|own|order)\b|\bown one\b|\bi need a (new |another |second )?(roam|bike|motorcycle|motorbike|pikipiki)\b/ },
@@ -2246,8 +2331,10 @@
 
     return '<div class="rai-hub-card" data-hub="' + esc(h.s) + '">' + head +
       '<div class="rai-hub-tags">' + tags + '</div>' +
-      (h.ph ? '<div class="rai-hub-phone">' + esc(h.ph) + '</div>'
-            : '<div class="rai-hub-phone none">No confirmed phone number for this station</div>') +
+      (h.hr ? '<div class="rai-hub-phone">🕒 ' + esc(h.hr) + '</div>'
+            : '<div class="rai-hub-phone none">Opening hours not confirmed for this station</div>') +
+      (hubOwnLine(h) ? '<div class="rai-hub-phone">' + esc(h.ph) + '</div>'
+            : '<div class="rai-hub-phone none">No direct line listed &middot; call Roam on ' + esc(PHONE) + '</div>') +
       (full && h.ld ? '<div class="rai-hub-phone none">Launched ' + esc(h.ld) + '</div>' : '') +
       '<div class="rai-hub-acts">' + acts + '</div></div>';
   }
@@ -3119,11 +3206,54 @@
   var OFFER_SH    = /\bshops?\b|\bstores?\b/;
   var OFFER_NAMES = { ch:'charging', re:'battery rental', as:'after-sales', sh:'parts shops' };
 
-  function hubDigits(h) { return h.ph ? h.ph.replace(/\D/g, '') : ''; }
+  /* A station without its own listed number is not a dead end: Roam's main
+     line reaches the team who can answer for any station. The card says which
+     number it is showing, so nobody is misled into thinking they are dialling
+     the forecourt. */
+  function hubPhone(h)  { return h.ph || PHONE; }
+  function hubOwnLine(h) { return !!h.ph; }
+  function hubDigits(h) { return hubPhone(h).replace(/\D/g, ''); }
   function hubMaps(h) {
     return 'https://www.google.com/maps/search/?api=1&query=' + h.lat + ',' + h.lng;
   }
   function hubName(h) { return 'Roam Hub – ' + h.s; }
+
+  /* ==========================================================================
+     Opening hours
+     Hours arrived from Roam operations in September 2026 and live on the hub
+     row itself, so a station that has not been confirmed still says so rather
+     than borrowing its neighbour's. The 24-hour count is counted from the
+     table on every call, so it cannot drift from what the cards show.
+     ========================================================================== */
+  var SERVICE_CENTRE_HOURS = '8:30am to 5:00pm';
+  var SALES_LINE_HOURS     = 'Mon–Fri, 9:00am to 5:00pm';
+  var HOURS_ASK = /\bopening hours\b|\bopen(ing)? time\b|\bwhat time\b|\bwhat hours\b|\bhours\b|\bare you open\b|\bwhen (do|does|are) (you|they|it|roam)\b|\bopen on (sat|sun|mon|tue|wed|thu|fri)/;
+
+  function open24() {
+    return HUBS.filter(function (h) { return /24/.test(h.hr); });
+  }
+
+  function hoursAnswer(q) {
+    if (!HOURS_ASK.test(q)) return null;
+
+    /* A named station answers for itself. */
+    var st = matchStations(q);
+    if (st.length === 1) {
+      var h = st[0];
+      return stationReply(h.hr
+        ? hubName(h) + ' is ' + (/24/.test(h.hr) ? 'open 24 hours.' : 'open ' + h.hr + '.')
+        : 'I do not have confirmed opening hours for ' + hubName(h) + ' yet.\n' +
+          'Call Roam on ' + PHONE + ' and the team will confirm them for you.',
+        [h], true);
+    }
+
+    var n = open24().length;
+    return { unresolved: false, forced: true, cat: 'hours', ui: 'hubFinder', text:
+      (n ? n + ' Roam Hubs are open 24 hours, so you can charge or swap in a battery at any time of night.\n' : '') +
+      '• Roam Nairobi Ride-In Ride-Out Service Centre, Lusaka Road: ' + SERVICE_CENTRE_HOURS + '\n' +
+      '• Sales line on ' + PHONE + ': ' + SALES_LINE_HOURS + '\n' +
+      'Hours for every listed Hub are on the cards below. Tell me which Hub you mean and I will give you that one.' };
+  }
 
   /* Straight-line kilometres. Good enough to rank stations; never presented
      as a driving distance. */
@@ -4120,6 +4250,9 @@
     /* The location database answers every hub, charging, rental, after-sales
        and shop location question before anything else gets a look in, so a
        question about where to go can never be answered with a product fact. */
+    /* Before the generic hub search, because "what time does Kayole open" is
+       an hours question about a station, not a request to find one. */
+    r = hoursAnswer(q);    if (r) { lastCat = r.cat; return r; }
     r = hubAnswer(q);      if (r) { lastCat = r.cat; return r; }
     r = locationAnswer(q); if (r) { lastCat = r.cat; return r; }
     r = calcAnswer(q);     if (r) { lastCat = r.cat; return r; }
@@ -4173,7 +4306,6 @@
 
     lastCat = cat;
     if (cat === 'colour') return { text: FALLBACK.colour, unresolved: true, forced: true, cat: cat };
-    if (cat === 'hours')  return { text: FALLBACK.hours,  unresolved: true, forced: true, cat: cat };
     if (cat === 'fault')  return { text: FALLBACK.fault,  unresolved: true, forced: true, cat: cat };
 
     var f = bestFaqIn(cat, q);
@@ -4216,7 +4348,11 @@
      stakes are different: a model writing its own warmer version of a data
      request reply is one sentence away from promising something Roam then has
      to honour. This reply is Roam's to write, not the model's. */
-  var HARD_CATS = { parts:1, hub_location:1, locations:1, country:1, clarify:1, fault:1, privacy:1 };
+  /* `hours` joins the hard set for the same reason locations did: the hours
+     are Roam operations data, and a model rewording "open 24 hours" into
+     something friendlier is one word away from inventing a closing time. */
+  var HARD_CATS = { parts:1, hub_location:1, locations:1, country:1, clarify:1, fault:1,
+                    privacy:1, hours:1 };
 
   function lockFor(r) {
     if (!r) return 'open';
@@ -4560,6 +4696,16 @@
                                   why: 'claims four riding modes; there are three' },
     { re: /\b(fully\s+)?submersible\b/i,
                                   why: 'claims the battery is submersible; it is IP67' },
+    /* Approved September 2026: the battery warranty is described by distance,
+       up to 100,000 km, and never as a number of years. "2-year" is the
+       motorcycle's warranty. A model that has both the old and the new Roam
+       document in its context will otherwise merge them into "a 2-year battery
+       warranty", which is the one sentence this rule exists to stop. Also
+       blocks the superseded 12-month and 800-cycle wording. */
+    { re: /\b(2|two)[-\s]?year\b[^.\n]{0,40}\bbatter|\bbatter[^.\n]{0,40}\b(2|two)[-\s]?year\b/i,
+                                  why: 'describes the battery warranty in years; it is up to 100,000 km' },
+    { re: /\b(12|twelve)[-\s]?month\b[^.\n]{0,40}\bbatter|\b800\s*(charge\s*)?cycles?\b/i,
+                                  why: 'uses superseded battery warranty wording' },
     { re: /\bin\s+stock\b|\bcurrently\s+available\s+for\s+immediate\b|\bi\s+(just\s+)?checked\b|\blet me check\b/i,
                                   why: 'claims live stock or a lookup it cannot perform' },
 
@@ -5187,5 +5333,6 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
+
 </script>
 </body></html>
